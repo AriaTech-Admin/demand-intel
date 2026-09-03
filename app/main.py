@@ -78,9 +78,19 @@ def trending(type: str = Query("all", pattern="^(all|movie|series)$"), limit: in
         sql += " ORDER BY sc.trend_score DESC LIMIT ?"
         params.append(limit)
         rows = db.execute(sql, params).fetchall()
-        return {"titles": [_title_row(db, r) | {
-            "trend_score": r["trend_score"], "confidence": r["confidence"],
-            "why_trending": json.loads(r["explanation"] or "[]")} for r in rows],
+        titles = []
+        for r in rows:
+            base = _title_row(db, r) | {
+                "trend_score": r["trend_score"], "confidence": r["confidence"],
+                "why_trending": json.loads(r["explanation"] or "[]")}
+            # Snapshot-only interest series for sparks — no external calls.
+            hist_rows = db.execute(
+                "SELECT search_interest FROM snapshots "
+                "WHERE title_id=? AND search_interest IS NOT NULL ORDER BY collected_at",
+                (r["id"],)).fetchall()
+            base["interest_history"] = [x["search_interest"] for x in hist_rows]
+            titles.append(base)
+        return {"titles": titles,
             "tmdb_configured": bool(config.TMDB_API_KEY)}
 
 
@@ -96,22 +106,23 @@ def search_demand(
     with get_db() as db:
         sql = """SELECT t.*, sc.trend_score, sc.confidence, sc.explanation, m.value AS growth, m.source, m.region, m.period, m.collected_at
                  FROM titles t
-                 LEFT JOIN metrics m ON m.title_id=t.id AND m.metric_name='search_growth_pct'
+                 LEFT JOIN metrics m ON m.id = (
+                     SELECT id FROM metrics
+                     WHERE title_id = t.id
+                       AND metric_name = 'search_growth_pct'
+                       AND region = ?
+                       AND period = ?
+                     ORDER BY collected_at DESC
+                     LIMIT 1)
                  JOIN scores sc ON sc.title_id=t.id
                  WHERE 1=1"""
-        params: list = []
+        params: list = [region, period]
         if type != "all":
             sql += " AND t.type=?"
             params.append("series" if type == "series" else "movie")
         if genre != "All":
             sql += " AND t.genres LIKE ?"
             params.append(f'%"{genre}"%')
-        if region != "Global":
-            sql += " AND m.region=?"
-            params.append(region)
-        if period != "7d":
-            sql += " AND m.period=?"
-            params.append(period)
         if intensity == "high":
             sql += " AND m.value >= 25"
         elif intensity == "medium":
@@ -143,11 +154,40 @@ def title_detail(title_id: int):
         out["history"] = [dict(s) for s in db.execute(
             "SELECT popularity, search_interest, collected_at FROM snapshots "
             "WHERE title_id=? ORDER BY collected_at", (title_id,)).fetchall()]
+        # Never call Google Trends here: related queries are lazy-loaded via
+        # GET /api/titles/{id}/related-queries so list/detail views stay
+        # snapshot-only and never hammer the unofficial Trends API.
         out["related_queries"] = []
-        if out["search_interest"] is not None:
-            from .providers.google_trends import GoogleTrendsProvider
-            out["related_queries"] = GoogleTrendsProvider().get_related_queries(out["title"])
         return out
+
+
+@app.get("/api/titles/{title_id}/history")
+def title_history(title_id: int):
+    """Snapshot-only history for sparks/charts. No external calls."""
+    with get_db() as db:
+        exists = db.execute("SELECT id FROM titles WHERE id=?", (title_id,)).fetchone()
+        if not exists:
+            raise HTTPException(404, "Title not found")
+        hist = [dict(s) for s in db.execute(
+            "SELECT popularity, search_interest, collected_at FROM snapshots "
+            "WHERE title_id=? ORDER BY collected_at", (title_id,)).fetchall()]
+        return {"history": hist}
+
+
+@app.get("/api/titles/{title_id}/related-queries")
+def title_related_queries(title_id: int):
+    """Lazy-loaded related queries. Only this endpoint may hit Google Trends."""
+    with get_db() as db:
+        r = db.execute("SELECT title FROM titles WHERE id=?", (title_id,)).fetchone()
+        if not r:
+            raise HTTPException(404, "Title not found")
+        title = r["title"]
+    try:
+        from .providers.google_trends import GoogleTrendsProvider
+        qs = GoogleTrendsProvider().get_related_queries(title)
+    except Exception:
+        qs = []
+    return {"related_queries": qs or []}
 
 
 @app.get("/api/regions")
@@ -210,9 +250,17 @@ def alerts():
     with get_db() as db:
         rows = db.execute(
             """SELECT t.title, t.type, t.id, m.value, m.source, m.region, m.period, m.collected_at
-               FROM metrics m JOIN titles t ON t.id=m.title_id
-               WHERE m.metric_name='search_growth_pct' AND m.value >= 50
-               ORDER BY m.collected_at DESC LIMIT 20""").fetchall()
+               FROM titles t
+               JOIN metrics m ON m.id = (
+                   SELECT id FROM metrics
+                   WHERE title_id = t.id
+                     AND metric_name = 'search_growth_pct'
+                     AND value IS NOT NULL
+                   ORDER BY collected_at DESC
+                   LIMIT 1)
+               WHERE m.value >= 50
+               ORDER BY m.collected_at DESC
+               LIMIT 20""").fetchall()
         return {"alerts": [dict(r) for r in rows]}
 
 
@@ -232,18 +280,17 @@ def status():
             "titles": db.execute("SELECT COUNT(*) c FROM titles").fetchone()["c"],
             "metrics": db.execute("SELECT COUNT(*) c FROM metrics").fetchone()["c"],
             "snapshots": db.execute("SELECT COUNT(*) c FROM snapshots").fetchone()["c"],
+            "ai_insights": db.execute("SELECT COUNT(*) c FROM ai_insights").fetchone()["c"],
         }
-    # AI insights count (derived, not verified)
-    try:
-        ai_count = db.execute("SELECT COUNT(*) c FROM ai_insights").fetchone()["c"]
-    except:
-        ai_count = 0
-    return {"counts": {**counts, "ai_insights": ai_count}, "last_refresh": dict(last) if last else None,
-            "tmdb_configured": bool(config.TMDB_API_KEY),
-            "gemini_configured": bool(config.GEMINI_API_KEY),
-            "opencode_configured": bool(config.OPENCODE_API_KEY),
-            "scoring_weights": config.SCORING_WEIGHTS,
-            "server_time_utc": utcnow()}
+    return {
+        "counts": counts,
+        "last_refresh": dict(last) if last else None,
+        "tmdb_configured": bool(config.TMDB_API_KEY),
+        "gemini_configured": bool(config.GEMINI_API_KEY),
+        "opencode_configured": bool(config.OPENCODE_API_KEY),
+        "scoring_weights": config.SCORING_WEIGHTS,
+        "server_time_utc": utcnow(),
+    }
 
 
 @app.get("/")

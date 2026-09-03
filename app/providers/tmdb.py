@@ -21,12 +21,22 @@ class TMDBProvider(MetadataProvider):
         if not self.available:
             return []
         url = f"{config.TMDB_BASE_URL}/trending/{media_type}/{config.TMDB_TRENDING_WINDOW}"
-        params = {"api_key": config.TMDB_API_KEY}
+        results = []
         async with httpx.AsyncClient(timeout=30) as client:
-            resp = await _get_with_retry(client, url, params)
-            if resp is None or resp.status_code != 200:
-                return []
-            results = resp.json().get("results", [])[: config.TMDB_MAX_TITLES]
+            page = 1
+            while len(results) < config.TMDB_MAX_TITLES:
+                params = {"api_key": config.TMDB_API_KEY, "page": page}
+                resp = await _get_with_retry(client, url, params)
+                if resp is None or resp.status_code != 200:
+                    break
+                batch = resp.json().get("results", [])
+                if not batch:
+                    break
+                results.extend(batch)
+                if len(batch) < 20:
+                    break
+                page += 1
+            results = results[: config.TMDB_MAX_TITLES]
             titles = [_normalize(r, media_type) for r in results]
             # Fetch credits for top titles (cast/directors), tolerating failures.
             for t in titles:
@@ -67,9 +77,12 @@ def _normalize(r: dict, media_type: str) -> TitleData:
 
 
 async def _enrich(client, t: TitleData):
-    """Genre names, seasons/episodes, cast, directors — best effort."""
+    """Genre names, seasons/episodes, cast, directors - best effort."""
     kind = "tv" if t.type == "series" else "movie"
-    params = {"api_key": config.TMDB_API_KEY}
+    params = {
+        "api_key": config.TMDB_API_KEY,
+        "append_to_response": "credits,external_ids",
+    }
     resp = await _get_with_retry(client, f"{config.TMDB_BASE_URL}/{kind}/{t.provider_id}", params)
     if resp is None or resp.status_code != 200:
         return
@@ -83,9 +96,9 @@ async def _enrich(client, t: TitleData):
     crew = credits.get("crew") or []
     t.directors = sorted({c.get("name", "") for c in crew
                           if c.get("job") in ("Director", "Creator")})[:4]
-    if not t.directors and credits.get("created_by"):
-        t.directors = [c.get("name", "") for c in credits["created_by"][:3]]
+    if not t.directors and d.get("created_by"):
+        t.directors = [c.get("name", "") for c in d.get("created_by")[:3]]
     # Cross-provider linkage: official IMDb id, used by the IMDb datasets provider.
-    ext = await _get_with_retry(client, f"{config.TMDB_BASE_URL}/{kind}/{t.provider_id}/external_ids", params)
-    if ext is not None and ext.status_code == 200:
-        t.imdb_id = ext.json().get("imdb_id")
+    ext_ids = d.get("external_ids") or {}
+    if ext_ids.get("imdb_id"):
+        t.imdb_id = ext_ids.get("imdb_id")

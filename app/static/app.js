@@ -94,37 +94,47 @@ async function loadDemand() {
     ? coverageNote + data.titles.map(t => card(t)).join("")
     : emptyState(data);
 }
+function sparkPointsFor(values) {
+  if (!Array.isArray(values) || values.length < 2) return "";
+  const min = Math.min(...values), max = Math.max(...values), rng = (max - min) || 1;
+  return values.map((v, i) =>
+    `${(i / (values.length - 1)) * 100},${28 - ((v - min) / rng) * 26}`).join(" ");
+}
 async function loadInterest() {
   const data = await get("/api/trending?limit=20");
   $("#interest-list").innerHTML = data.titles.length ? data.titles.map(t => {
     const dir = t.search_growth_pct === null || t.search_growth_pct === undefined ? "flat"
       : t.search_growth_pct > 15 ? "up" : t.search_growth_pct < -5 ? "down" : "flat";
     const label = dir === "up" ? "↑ Rapidly increasing" : dir === "down" ? "↓ Decreasing" : "→ Stable";
-    const spark = t.search_interest !== null && t.search_interest !== undefined
-      ? `<svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline fill="none" stroke="${dir === 'down' ? '#f85149' : '#3fb950'}" stroke-width="2" points="${sparkPoints(t.id)}" data-tid="${t.id}"/></svg>`
-      : `<span class="unavail">No time-series from source</span>`;
+    // Snapshot-only series embedded in /api/trending — no per-row fetch, no Trends calls.
+    const pts = Array.isArray(t.interest_history)
+      ? t.interest_history.filter(v => v !== null && v !== undefined)
+      : [];
+    const spark = pts.length >= 2
+      ? `<svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline fill="none" stroke="${dir === 'down' ? '#f85149' : '#3fb950'}" stroke-width="2" points="${sparkPointsFor(pts)}"/></svg>`
+      : `<span class="unavail">${pts.length === 0 ? "No time-series from source" : "Current signal only"}</span>`;
     return `<div class="interest-row" onclick="openDetail(${t.id})">
       <span class="dir ${dir}">${label}</span>${spark}
       <div><b>${esc(t.title)}</b> <span class="meta">${typeBadge(t.type)} · ${esc(t.genres.slice(0, 2).join(" / ") || "genre n/a")}</span></div>
       <div class="meta" style="text-align:right">Signal: Google Trends (7d)<br>${ago(t.last_updated)}</div>
     </div>`;
   }).join("") : `<p class="sub">No scored titles yet. Click “Refresh data” once configured.</p>`;
-  drawSparks();
 }
-function sparkPoints(id) { return "0,25 50,15 100,5"; }  // shape refined by drawSparks from real history
 let sparkCache = {};
 function drawSparks() {
-  $$(".spark polyline").forEach(async (pl) => {
+  // Snapshot-only fallback: never calls GET /api/titles/{id} (which could hit Trends).
+  // loadInterest already renders inline; this only upgrades any legacy placeholder polylines.
+  $$(".spark polyline[data-tid]").forEach(async (pl) => {
     const id = pl.dataset.tid;
     if (!(id in sparkCache)) {
-      const d = await get(`/api/titles/${id}`);
-      sparkCache[id] = (d.history || []).map(h => h.search_interest).filter(v => v !== null && v !== undefined);
+      try {
+        const d = await get(`/api/titles/${id}/history`);
+        sparkCache[id] = (d.history || []).map(h => h.search_interest).filter(v => v !== null && v !== undefined);
+      } catch (e) { sparkCache[id] = []; }
     }
     const s = sparkCache[id];
     if (s.length >= 2) {
-      const min = Math.min(...s), max = Math.max(...s), rng = max - min || 1;
-      pl.setAttribute("points", s.map((v, i) =>
-        `${(i / (s.length - 1)) * 100},${28 - ((v - min) / rng) * 26}`).join(" "));
+      pl.setAttribute("points", sparkPointsFor(s));
     } else { pl.closest(".spark")?.replaceWith(Object.assign(document.createElement("span"),
       { className: "unavail", textContent: "Current signal only" })); }
   });
@@ -161,16 +171,39 @@ async function get(url) {
 
 async function openDetail(id) {
   const t = await get(`/api/titles/${id}`);
-  const hist = (t.history || []).filter(h => h.popularity !== null && h.popularity !== undefined);
-  const spark = t.search_interest !== null && t.search_interest !== undefined && hist.length >= 2
-    ? `<div class="section"><h3>Interest trend (real snapshots)</h3>
+  // Interest = Google Trends search_interest over real snapshots (collected_at order).
+  // Popularity = TMDB popularity — never mixed into the interest polyline.
+  const interestHist = (t.history || []).filter(h => h.search_interest !== null && h.search_interest !== undefined);
+  const popHist = (t.history || []).filter(h => h.popularity !== null && h.popularity !== undefined);
+  const interestChart = (() => {
+    if (interestHist.length < 2) return "";
+    const vals = interestHist.map(h => h.search_interest);
+    const min = Math.min(...vals), max = Math.max(...vals), rng = (max - min) || 1;
+    const pts = interestHist.map((h, i) =>
+      `${(i / (interestHist.length - 1)) * 400},${95 - ((h.search_interest - min) / rng) * 90}`).join(" ");
+    return `<div class="section"><h3>Interest trend (real snapshots)</h3>
        <svg class="chart" viewBox="0 0 400 100" preserveAspectRatio="none">
-         <polyline fill="none" stroke="#3fb950" stroke-width="2.5"
-           points="${hist.map((h, i) => `${(i / (hist.length - 1)) * 400},${95 - (h.popularity / Math.max(...hist.map(x => x.popularity))) * 90}`).join(" ")}"/>
+         <polyline fill="none" stroke="#3fb950" stroke-width="2.5" points="${pts}"/>
        </svg>
-       <div class="meta">${hist.length} snapshots collected · first ${ago(hist[0].collected_at)}</div></div>`
+       <div class="meta">${interestHist.length} search-interest snapshots collected · first ${ago(interestHist[0].collected_at)} · Source: Google Trends</div></div>`;
+  })();
+  const interestBlock = interestChart
+    ? interestChart
     : `<div class="section"><h3>Interest trend</h3>
-       <span class="unavail">Current popularity signal only — not enough collected snapshots to show a real trend.</span></div>`;
+       <span class="unavail">No search-interest history yet — not enough collected snapshots to show a real trend.</span></div>`;
+  const popBlock = (() => {
+    if (popHist.length < 2) return "";
+    const vals = popHist.map(h => h.popularity);
+    const min = Math.min(...vals), max = Math.max(...vals), rng = (max - min) || 1;
+    const pts = popHist.map((h, i) =>
+      `${(i / (popHist.length - 1)) * 400},${95 - ((h.popularity - min) / rng) * 90}`).join(" ");
+    return `<div class="section"><h3>TMDB popularity (real snapshots)</h3>
+       <svg class="chart" viewBox="0 0 400 100" preserveAspectRatio="none">
+         <polyline fill="none" stroke="#58a6ff" stroke-width="2.5" points="${pts}"/>
+       </svg>
+       <div class="meta">${popHist.length} popularity snapshots collected · first ${ago(popHist[0].collected_at)} · Source: TMDB</div></div>`;
+  })();
+  const spark = interestBlock + popBlock;
 
   const comps = t.components || {};
   const compRows = Object.entries(comps).map(([k, c]) =>
@@ -212,9 +245,20 @@ async function openDetail(id) {
       ${provRows || '<tr><td colspan=6 class="unavail">No metrics collected yet</td></tr>'}</table>
       <div class="meta" style="margin-top:6px">Ratings: <b>IMDb Official Datasets</b> (datasets.imdbws.com) · Popularity & metadata: <b>TMDB</b> · Search demand: <b>Google Trends</b>.<br>
       Rotten Tomatoes and Letterboxd publish no official public API, so no numbers are shown for them ("Data unavailable") rather than estimated.</div></div>
-    ${t.related_queries.length ? `<div class="section"><h3>Rising related searches</h3><div class="badges">${t.related_queries.map(q => `<span class="badge">${esc(q)}</span>`).join("")}</div></div>` : ""}
+    <div class="section" id="related-section"><h3>Rising related searches</h3><div id="related-body" class="badges"><span class="unavail">Loading…</span></div></div>
     <div class="section"><h3>Last updated</h3><div>${ago(t.last_updated)} (${esc(t.last_updated || "")} UTC)</div></div>`;
   $("#modal").classList.remove("hidden");
+  // Lazy-load related queries only for the opened title (never from list/spark paths).
+  (async ()=>{
+    const sec = $("#related-section"), body = $("#related-body");
+    if(!sec || !body) return;
+    try{
+      const rq = await get(`/api/titles/${t.id}/related-queries`);
+      const qs = rq.related_queries || [];
+      if(!qs.length){ sec.style.display = "none"; return; }
+      body.innerHTML = qs.map(q => `<span class="badge">${esc(q)}</span>`).join("");
+    }catch(e){ sec.style.display = "none"; }
+  })();
   // Fetch AI insight (derived, cached 24h) - improves data where Trends is Data unavailable
   (async ()=>{
     const el = $("#ai-insight-body");
