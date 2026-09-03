@@ -147,18 +147,18 @@ def _collect_and_score() -> dict:
                 for sig in trends.get_signals(title_name, geo=geo,
                                               period=config.GOOGLE_TRENDS_PERIOD):
                     quality = "verified" if sig.value is not None else "unavailable"
-                db.execute(
-                    """INSERT INTO metrics(title_id, metric_name, value, source, region, period, collected_at, quality)
-                       VALUES(?,?,?,?,?,?,?,?)""",
-                    (title_id, sig.metric_name, sig.value, sig.source, sig.region, sig.period,
-                     sig.collected_at, quality))
-                if sig.metric_name == "search_interest" and sig.value is not None:
-                    db.execute("INSERT INTO snapshots(title_id, search_interest, collected_at) VALUES(?,?,?)",
-                               (title_id, sig.value, sig.collected_at))
-                detail["trends_signals"] += 1
-                if sig.metric_name == "search_growth_pct" and sig.value is not None \
-                        and sig.value >= ALERT_GROWTH_THRESHOLD:
-                    detail["alerts"] += 1   # surfaced by GET /api/alerts from real metrics
+                    db.execute(
+                        """INSERT INTO metrics(title_id, metric_name, value, source, region, period, collected_at, quality)
+                           VALUES(?,?,?,?,?,?,?,?)""",
+                        (title_id, sig.metric_name, sig.value, sig.source, sig.region, sig.period,
+                         sig.collected_at, quality))
+                    if sig.metric_name == "search_interest" and sig.value is not None:
+                        db.execute("INSERT INTO snapshots(title_id, search_interest, collected_at) VALUES(?,?,?)",
+                                   (title_id, sig.value, sig.collected_at))
+                    detail["trends_signals"] += 1
+                    if sig.metric_name == "search_growth_pct" and sig.value is not None \
+                            and sig.value >= ALERT_GROWTH_THRESHOLD:
+                        detail["alerts"] += 1   # surfaced by GET /api/alerts from real metrics
 
     compute_and_store_scores()
     return detail

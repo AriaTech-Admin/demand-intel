@@ -12,7 +12,8 @@ COPY . .
 
 # Render provides PORT env var; default 8000 for local
 ENV PORT=8000
-ENV DB_PATH=/tmp/demand_intel.db
+ENV DB_PATH=/var/data/demand_intel.db
+RUN mkdir -p /var/data
 
 EXPOSE 8000
 

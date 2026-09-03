@@ -20,6 +20,8 @@ Then either wait for the scheduled refresh (default: every 60 min) or trigger on
 curl -X POST http://127.0.0.1:8000/api/refresh
 ```
 
+> **Production:** DB lives on the Render disk at `/var/data/demand_intel.db` (persistent); local default remains `./demand_intel.db`.
+
 ## Data sources (real, replaceable)
 
 | Provider | What it provides | Module |

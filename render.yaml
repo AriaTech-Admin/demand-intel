@@ -3,8 +3,12 @@ services:
     name: demand-intel
     env: docker
     dockerfilePath: ./Dockerfile
-    plan: free
+    plan: starter  # Free instances cannot use disks - persistence requires paid plan (starter) for disk
     healthCheckPath: /api/status
+    disk:
+      name: demand-intel-data
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: TMDB_API_KEY
         sync: false
@@ -13,7 +17,7 @@ services:
       - key: OPENCODE_API_KEY
         sync: false
       - key: DB_PATH
-        value: /tmp/demand_intel.db
+        value: /var/data/demand_intel.db
       - key: REFRESH_INTERVAL_MINUTES
         value: 60
       - key: PYTHONUNBUFFERED
