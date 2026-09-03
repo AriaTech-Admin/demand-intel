@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: demand-intel
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /api/status
+    envVars:
+      - key: TMDB_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENCODE_API_KEY
+        sync: false
+      - key: DB_PATH
+        value: /tmp/demand_intel.db
+      - key: REFRESH_INTERVAL_MINUTES
+        value: 60
+      - key: PYTHONUNBUFFERED
+        value: 1

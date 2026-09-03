@@ -1,0 +1,15 @@
+__pycache__
+*.pyc
+*.pyo
+.mypy_cache
+.pytest_cache
+.venv
+venv
+.git
+.gitignore
+demand_intel.db
+demand_intel.db-*
+_imdb_ratings.tsv.gz
+server.log
+*.log
+.env

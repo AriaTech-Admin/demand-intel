@@ -1,0 +1,20 @@
+# env & secrets
+.env
+
+# database & caches
+demand_intel.db
+demand_intel.db-*
+_imdb_ratings.tsv.gz
+__pycache__/
+*.pyc
+*.pyo
+.mypy_cache/
+.pytest_cache/
+
+# logs
+server.log
+*.log
+
+# venv
+.venv/
+venv/

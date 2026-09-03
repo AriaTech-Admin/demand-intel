@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demand Intelligence — Movies & Series</title>
+<link rel="stylesheet" href="/static/style.css?v=4">
+<script>(function(){try{var t=localStorage.getItem("theme");if(!t) t=window.matchMedia("(prefers-color-scheme: light)").matches?"light":"dark";document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="logo">📈</span> Demand Intelligence</div>
+  <nav>
+    <button class="nav-btn active" data-view="trending">Trending Now</button>
+    <button class="nav-btn" data-view="demand">Search Demand</button>
+    <button class="nav-btn" data-view="interest">Interest Trends</button>
+  </nav>
+  <div class="head-right">
+    <button id="theme-toggle" title="Toggle light/dark" aria-label="Toggle theme">☾</button>
+    <input id="search" type="search" placeholder="Search titles…">
+    <span id="status-chip" class="chip">…</span>
+  </div>
+</header>
+
+<main>
+  <section id="alerts-bar" class="hidden"></section>
+
+  <!-- TRENDING -->
+  <section id="view-trending" class="view">
+    <h1>Trending Now</h1>
+    <p class="sub">Titles ranked by the configured trend score. Momentum over static popularity.</p>
+    <div class="filters">
+      <div class="filter-group" id="f-type">
+        <span class="fl">Type</span>
+        <button data-v="all" class="pill active">All</button>
+        <button data-v="movie" class="pill">Movies</button>
+        <button data-v="series" class="pill">Series</button>
+      </div>
+    </div>
+    <div id="trend-grid" class="grid"></div>
+  </section>
+
+  <!-- SEARCH DEMAND -->
+  <section id="view-demand" class="view hidden">
+    <h1>Search Demand</h1>
+    <p class="sub">Titles whose search interest is increasing (Google Trends measurements).</p>
+    <div class="filters">
+      <div class="filter-group"><span class="fl">Type</span><div id="d-type"></div></div>
+      <div class="filter-group"><span class="fl">Genre</span><select id="d-genre"><option>All</option></select></div>
+      <div class="filter-group"><span class="fl">Region</span><select id="d-region"></select></div>
+      <div class="filter-group"><span class="fl">Period</span>
+        <select id="d-period"><option value="7d" selected>Last 7 days</option>
+        <option value="24h">Last 24 hours</option><option value="30d">Last 30 days</option>
+        <option value="90d">Last 90 days</option></select></div>
+      <div class="filter-group"><span class="fl">Intensity</span>
+        <select id="d-intensity"><option value="all">All</option>
+        <option value="high">High (≥25%)</option><option value="medium">Medium (5–25%)</option></select></div>
+    </div>
+    <div id="demand-grid" class="grid"></div>
+  </section>
+
+  <!-- INTEREST TRENDS -->
+  <section id="view-interest" class="view hidden">
+    <h1>Watch / Interest Trends</h1>
+    <p class="sub">Direction of interest per title, from real snapshots only. History is shown only where it exists.</p>
+    <div id="interest-list" class="interest-list"></div>
+  </section>
+</main>
+
+<!-- DETAIL MODAL -->
+<div id="modal" class="modal hidden">
+  <div class="modal-card">
+    <button id="modal-close" class="close-btn">✕</button>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<footer>
+  All metrics carry their source, region, period, and collection timestamp. No data is simulated.
+  Where a source does not provide a metric, it is shown as “Data unavailable”.
+</footer>
+
+<script src="/static/app.js?v=4"></script>
+</body>
+</html>
