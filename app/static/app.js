@@ -83,9 +83,18 @@ async function loadTrending() {
     : emptyState(data);
 }
 async function loadDemand() {
+  const selRegion = $("#d-region").value, selPeriod = $("#d-period").value;
   const p = new URLSearchParams({ type: state.demandType, genre: $("#d-genre").value,
-    region: $("#d-region").value, period: $("#d-period").value, intensity: $("#d-intensity").value });
+    region: selRegion, period: selPeriod, intensity: $("#d-intensity").value });
   const data = await get(`/api/search-demand?${p}`);
+  // Keep dropdown availability in sync with what the API actually collected.
+  if (Array.isArray(data.available_regions)) availableRegions = new Set(data.available_regions);
+  if (Array.isArray(data.available_periods)) availablePeriods = new Set(data.available_periods);
+  const uncollected = data.not_collected === true
+    || !availableRegions.has(selRegion) || !availablePeriods.has(selPeriod);
+  const notCollectedBanner = `<div class="card"><div class="card-body"><div class="card-title">Data unavailable — not collected (set GOOGLE_TRENDS_GEOS / period and refresh)</div>
+    <div class="meta">No search-demand measurements have been collected for <b>${esc(selRegion)} / ${esc(selPeriod)}</b> yet. Collected: <b>${[...availableRegions].join(", ") || "none yet"}</b> / <b>${[...availablePeriods].join(", ") || "none yet"}</b>. Set <code>GOOGLE_TRENDS_GEOS</code> / <code>GOOGLE_TRENDS_PERIODS</code> in <code>.env</code> and trigger a refresh to collect it. No metrics are fabricated for uncollected regions/periods.</div></div></div>`;
+  if (uncollected) { $("#demand-grid").innerHTML = notCollectedBanner; return; }
   // Coverage stats: show verified vs unavailable
   const verified = data.titles.filter(x=> x.search_growth_pct !== null && x.search_growth_pct !== undefined).length;
   const total = data.titles.length;
@@ -153,12 +162,12 @@ function emptyState(data) {
   const selRegion = $("#d-region")?.value || "Global";
   const selPeriod = $("#d-period")?.value || "7d";
   if (!availableRegions.has(selRegion)) {
-    return `<div class="card"><div class="card-body"><div class="card-title">Data unavailable for ${esc(selRegion)}</div>
+    return `<div class="card"><div class="card-body"><div class="card-title">Data unavailable — not collected (set GOOGLE_TRENDS_GEOS / period and refresh)</div>
       <div class="meta">No search-demand measurements have been collected for <b>${esc(selRegion)}</b> yet. The pipeline currently collects only <b>${[...availableRegions].join(", ") || "Global"}</b> (see <code>GOOGLE_TRENDS_GEOS</code> in <code>.env</code>/<code>app/config.py</code>). Set <code>GOOGLE_TRENDS_GEOS=GLOBAL,US,GB</code> and trigger a refresh to collect per-region data. No data is fabricated — the UI shows “Data unavailable” where a source did not provide a metric.</div></div></div>`;
   }
   if (!availablePeriods.has(selPeriod)) {
-    return `<div class="card"><div class="card-body"><div class="card-title">Data unavailable for period ${esc(selPeriod)}</div>
-      <div class="meta">The pipeline currently stores only <b>${[...availablePeriods].join(", ")}</b> search windows. The 24h/30d/90d options will be populated only if you collect those periods. Default is <code>now 7-d</code> (7d).</div></div></div>`;
+    return `<div class="card"><div class="card-body"><div class="card-title">Data unavailable — not collected (set GOOGLE_TRENDS_GEOS / period and refresh)</div>
+      <div class="meta">No search-demand measurements have been collected for period <b>${esc(selPeriod)}</b> yet. The pipeline currently stores only <b>${[...availablePeriods].join(", ")}</b> search windows. Set <code>GOOGLE_TRENDS_PERIODS</code> (e.g. <code>now 7-d,today 1-m</code>) and refresh to collect 24h/30d/90d. Default is <code>now 7-d</code> (7d).</div></div></div>`;
   }
   return `<p class="sub">No titles match. Try different filters, or trigger a data refresh.</p>`;
 }
@@ -181,16 +190,16 @@ async function openDetail(id) {
     const min = Math.min(...vals), max = Math.max(...vals), rng = (max - min) || 1;
     const pts = interestHist.map((h, i) =>
       `${(i / (interestHist.length - 1)) * 400},${95 - ((h.search_interest - min) / rng) * 90}`).join(" ");
-    return `<div class="section"><h3>Interest trend (real snapshots)</h3>
+    return `<div class="section"><h3>Google Trends search interest (real snapshots)</h3>
        <svg class="chart" viewBox="0 0 400 100" preserveAspectRatio="none">
          <polyline fill="none" stroke="#3fb950" stroke-width="2.5" points="${pts}"/>
        </svg>
-       <div class="meta">${interestHist.length} search-interest snapshots collected · first ${ago(interestHist[0].collected_at)} · Source: Google Trends</div></div>`;
+       <div class="meta">${interestHist.length} Google Trends search-interest snapshots collected · first ${ago(interestHist[0].collected_at)} · Source: Google Trends</div></div>`;
   })();
   const interestBlock = interestChart
     ? interestChart
-    : `<div class="section"><h3>Interest trend</h3>
-       <span class="unavail">No search-interest history yet — not enough collected snapshots to show a real trend.</span></div>`;
+    : `<div class="section"><h3>Google Trends search interest (real snapshots)</h3>
+       <span class="unavail">Data unavailable — not enough search-interest snapshots to show a real trend.</span></div>`;
   const popBlock = (() => {
     if (popHist.length < 2) return "";
     const vals = popHist.map(h => h.popularity);
@@ -318,12 +327,25 @@ async function init() {
   configuredGeos = regions.configured_geos || [];
   $("#d-region").innerHTML = Object.keys(regions.regions).map(r => {
     const hasData = availableRegions.has(r);
-    return `<option value="${r}"${hasData ? "" : " style=\"color:#8b949e\""}>${r}${hasData ? " ✓" : " — no data yet"}</option>`;
+    return `<option value="${esc(r)}"${hasData ? "" : " disabled style=\"color:#8b949e\""}>${esc(r)}${hasData ? " ✓" : " — no data yet"}</option>`;
   }).join("");
-  // annotate period options
+  // Drive period options from collected data: disable uncollected, default to collected.
   $$("#d-period option").forEach(o => {
-    if (!availablePeriods.has(o.value)) o.textContent += " — no data yet";
+    const hasData = availablePeriods.has(o.value);
+    o.disabled = !hasData;
+    o.textContent = o.textContent.replace(" — no data yet", "");
+    if (!hasData) o.textContent += " — no data yet";
   });
+  // Default selection to a region/period that actually has rows (prefer Global / 7d).
+  const regionKeys = Object.keys(regions.regions);
+  const defaultRegion = availableRegions.has("Global") ? "Global"
+    : [...availableRegions].find(r => regionKeys.includes(r)) || regionKeys[0] || "Global";
+  const periodOrder = ["7d", "24h", "30d", "90d"];
+  const defaultPeriod = availablePeriods.has("7d") ? "7d"
+    : periodOrder.find(x => availablePeriods.has(x)) || [...availablePeriods][0] || "7d";
+  $("#d-region").value = regionKeys.includes(defaultRegion) ? defaultRegion : (regionKeys[0] || "Global");
+  const periodValues = $$("#d-period option").map(o => o.value);
+  $("#d-period").value = periodValues.includes(defaultPeriod) ? defaultPeriod : (periodValues[0] || "7d");
   try {
     const st = await get("/api/status");
     $("#status-chip").textContent = st.tmdb_configured

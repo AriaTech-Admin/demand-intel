@@ -38,10 +38,11 @@ class GoogleTrendsProvider(SearchDemandProvider):
     name = "Google Trends"
 
     def get_signals(self, title: str, geo: str = "", period: str = "now 7-d") -> list[SearchSignal]:
+        period_label = _period_label(period)
         if not HAS_PYTRENDS:
             log.warning("pytrends not installed; search-demand data unavailable")
             return [SearchSignal("search_interest", None, self.name,
-                                 _region_name(geo), "7d", _now())]
+                                 _region_name(geo), period_label, _now())]
         collected = _now()
         df = None
         used_title = title
@@ -78,7 +79,7 @@ class GoogleTrendsProvider(SearchDemandProvider):
         if df is None or df.empty or used_title not in df.columns:
             log.info("Google Trends no data for %r variants %r last_error=%s", title, _title_variants(title), last_error)
             return [SearchSignal("search_interest", None, self.name,
-                                 _region_name(geo), "7d", collected)]
+                                 _region_name(geo), period_label, collected)]
         series = df[used_title].astype(float)
         # Relative interest 0-100 as reported by Google Trends (source-defined scale).
         interest = float(series.iloc[-1])
@@ -93,9 +94,9 @@ class GoogleTrendsProvider(SearchDemandProvider):
             growth_pct = None
         signals = [
             SearchSignal("search_interest", interest, self.name,
-                         _region_name(geo), "7d", collected),
+                         _region_name(geo), period_label, collected),
             SearchSignal("search_growth_pct", growth_pct, self.name,
-                         _region_name(geo), "7d", collected),
+                         _region_name(geo), period_label, collected),
         ]
         time.sleep(random.uniform(1.0, 2.0))   # be polite to the upstream service (increased to avoid 429)
         return signals
@@ -127,6 +128,36 @@ class GoogleTrendsProvider(SearchDemandProvider):
             log.warning("related_queries failed for %r: %s", title, e)
         self._related_cache[key] = (_time.time(), [])
         return []
+
+
+def _period_label(timeframe: str) -> str:
+    """Map a pytrends timeframe to the short period label persisted in metrics.
+
+    e.g. "now 7-d" -> "7d", "now 1-d" -> "24h", "today 1-m" -> "30d",
+    "today 3-m" -> "90d". Unknown timeframes fall back to "7d" only when they
+    contain a 7-day marker, else to the raw timeframe stripped (never invent
+    a 24h/30d/90d label that wasn't requested).
+    """
+    tf = (timeframe or "").strip().lower()
+    mapping = {
+        "now 1-h": "24h",
+        "now 4-h": "24h",
+        "now 1-d": "24h",
+        "now 7-d": "7d",
+        "today 1-m": "30d",
+        "today 3-m": "90d",
+    }
+    if tf in mapping:
+        return mapping[tf]
+    if "3-m" in tf:
+        return "90d"
+    if "1-m" in tf or "30-d" in tf or "30d" in tf:
+        return "30d"
+    if "7-d" in tf or tf == "7d":
+        return "7d"
+    if "1-d" in tf or "1-h" in tf or "4-h" in tf or tf == "24h":
+        return "24h"
+    return tf or "7d"
 
 
 def _region_name(geo: str) -> str:

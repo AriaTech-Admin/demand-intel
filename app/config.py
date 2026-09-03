@@ -41,7 +41,15 @@ GOOGLE_TRENDS_GEO = ""                  # "" = worldwide (legacy, single region)
 # Comma-separated list of geo codes to collect. Empty or "GLOBAL" means worldwide.
 # Example: "GLOBAL,US,GB" collects worldwide + US + UK. Each extra region adds ~20 Trends calls per refresh.
 GOOGLE_TRENDS_GEOS = [g.strip() for g in os.getenv("GOOGLE_TRENDS_GEOS", "GLOBAL").split(",") if g.strip()]
-GOOGLE_TRENDS_PERIOD = "now 7-d"        # last 7 days
+# Single timeframe (pytrends syntax, e.g. "now 7-d"). Env-overridable; never hardcoded at call sites.
+GOOGLE_TRENDS_PERIOD = os.getenv("GOOGLE_TRENDS_PERIOD", "now 7-d")
+# Optional comma-separated timeframes to collect (e.g. "now 7-d,today 1-m").
+# Defaults to just GOOGLE_TRENDS_PERIOD. Extra periods are collected ONLY if
+# explicitly configured here — never auto-fabricated for 24h/30d/90d.
+GOOGLE_TRENDS_PERIODS = [p.strip() for p in os.getenv("GOOGLE_TRENDS_PERIODS", GOOGLE_TRENDS_PERIOD).split(",") if p.strip()]
+# Short period labels offered as UI filters. Collection only happens for
+# configured timeframes above; uncollected options show "Data unavailable".
+SUPPORTED_PERIODS = ("24h", "7d", "30d", "90d")
 
 # Geographic regions offered as filters (Google Trends 'geo' codes; "" = worldwide).
 REGIONS = {
@@ -79,3 +87,23 @@ def get_trends_geos() -> list[str]:
             if g not in out:
                 out.append(g)
     return out or [GOOGLE_TRENDS_GEO]
+
+
+def get_trends_periods() -> list[str]:
+    """Resolve configured Trends timeframes (pytrends syntax).
+
+    Returns GOOGLE_TRENDS_PERIODS, falling back to [GOOGLE_TRENDS_PERIOD].
+    Only configured timeframes are ever collected — the pipeline never
+    invents 24h/30d/90d data that wasn't requested.
+    """
+    periods = [p for p in GOOGLE_TRENDS_PERIODS if p]
+    if periods:
+        # de-dupe, preserve order
+        seen: list[str] = []
+        for p in periods:
+            if p not in seen:
+                seen.append(p)
+        return seen
+    if GOOGLE_TRENDS_PERIOD:
+        return [GOOGLE_TRENDS_PERIOD]
+    return ["now 7-d"]

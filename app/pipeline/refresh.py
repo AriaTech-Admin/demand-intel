@@ -136,29 +136,33 @@ def _collect_and_score() -> dict:
             return (last, -td.popularity if td.popularity else 0)
         measured.sort(key=sort_key)
         geos = config.get_trends_geos()
-        # Limit to avoid 429: max 20 titles * len(geos) signals; sleep happens inside provider
-        max_titles_per_geo = 20 if len(geos) == 1 else max(5, 20 // len(geos))
+        # Only configured timeframes are collected — never auto-invent 24h/30d/90d.
+        periods = config.get_trends_periods()
+        # Limit to avoid 429: max titles split across geo x period combos; sleep happens inside provider
+        combos = max(1, len(geos) * len(periods))
+        max_titles_per_geo = 20 if combos == 1 else max(5, 20 // combos)
         for t in measured[:max_titles_per_geo]:
             row = db.execute("SELECT id FROM titles WHERE provider=? AND provider_id=? AND type=?",
                              (t.provider, t.provider_id, t.type)).fetchone()
             title_id = row["id"]
             title_name = db.execute("SELECT title FROM titles WHERE id=?", (title_id,)).fetchone()["title"]
             for geo in geos:
-                for sig in trends.get_signals(title_name, geo=geo,
-                                              period=config.GOOGLE_TRENDS_PERIOD):
-                    quality = "verified" if sig.value is not None else "unavailable"
-                    db.execute(
-                        """INSERT INTO metrics(title_id, metric_name, value, source, region, period, collected_at, quality)
-                           VALUES(?,?,?,?,?,?,?,?)""",
-                        (title_id, sig.metric_name, sig.value, sig.source, sig.region, sig.period,
-                         sig.collected_at, quality))
-                    if sig.metric_name == "search_interest" and sig.value is not None:
-                        db.execute("INSERT INTO snapshots(title_id, search_interest, collected_at) VALUES(?,?,?)",
-                                   (title_id, sig.value, sig.collected_at))
-                    detail["trends_signals"] += 1
-                    if sig.metric_name == "search_growth_pct" and sig.value is not None \
-                            and sig.value >= ALERT_GROWTH_THRESHOLD:
-                        detail["alerts"] += 1   # surfaced by GET /api/alerts from real metrics
+                for period_tf in periods:
+                    for sig in trends.get_signals(title_name, geo=geo,
+                                                  period=period_tf):
+                        quality = "verified" if sig.value is not None else "unavailable"
+                        db.execute(
+                            """INSERT INTO metrics(title_id, metric_name, value, source, region, period, collected_at, quality)
+                               VALUES(?,?,?,?,?,?,?,?)""",
+                            (title_id, sig.metric_name, sig.value, sig.source, sig.region, sig.period,
+                             sig.collected_at, quality))
+                        if sig.metric_name == "search_interest" and sig.value is not None:
+                            db.execute("INSERT INTO snapshots(title_id, search_interest, collected_at) VALUES(?,?,?)",
+                                       (title_id, sig.value, sig.collected_at))
+                        detail["trends_signals"] += 1
+                        if sig.metric_name == "search_growth_pct" and sig.value is not None \
+                                and sig.value >= ALERT_GROWTH_THRESHOLD:
+                            detail["alerts"] += 1   # surfaced by GET /api/alerts from real metrics
 
     compute_and_store_scores()
     return detail

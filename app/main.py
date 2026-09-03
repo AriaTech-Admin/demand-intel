@@ -130,10 +130,24 @@ def search_demand(
         sql += " ORDER BY CASE WHEN m.value IS NULL THEN 1 ELSE 0 END, m.value DESC LIMIT ?"
         params.append(limit)
         rows = db.execute(sql, params).fetchall()
+        # Verified-only availability: which region/period combos were actually collected.
+        reg_rows = db.execute(
+            "SELECT DISTINCT region FROM metrics WHERE metric_name='search_growth_pct' AND value IS NOT NULL"
+        ).fetchall()
+        per_rows = db.execute(
+            "SELECT DISTINCT period FROM metrics WHERE metric_name='search_growth_pct' AND value IS NOT NULL"
+        ).fetchall()
+        available_regions = [x["region"] for x in reg_rows]
+        available_periods = [x["period"] for x in per_rows]
+        collected = any(r["growth"] is not None for r in rows)
         return {"titles": [_title_row(db, r) | {
             "search_growth_pct": r["growth"], "confidence": r["confidence"],
             "why_trending": json.loads(r["explanation"] or "[]")} for r in rows],
-            "tmdb_configured": bool(config.TMDB_API_KEY)}
+            "tmdb_configured": bool(config.TMDB_API_KEY),
+            "available_regions": available_regions,
+            "available_periods": available_periods,
+            "region": region, "period": period,
+            "not_collected": not collected}
 
 
 @app.get("/api/titles/{title_id}")
@@ -198,7 +212,7 @@ def regions():
         # Always at least Global is expected once data collected
         period_rows = db.execute('SELECT DISTINCT period FROM metrics WHERE metric_name=\'search_growth_pct\' AND value IS NOT NULL').fetchall()
         available_periods = [x["period"] for x in period_rows]
-    return {"regions": config.REGIONS, "available_regions": available, "available_periods": available_periods, "configured_geos": config.get_trends_geos()}
+    return {"regions": config.REGIONS, "available_regions": available, "available_periods": available_periods, "configured_geos": config.get_trends_geos(), "configured_periods": config.get_trends_periods(), "supported_periods": list(config.SUPPORTED_PERIODS)}
 
 
 @app.get("/api/titles/{title_id}/ai-insights")
