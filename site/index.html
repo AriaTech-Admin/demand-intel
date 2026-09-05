@@ -122,6 +122,12 @@ footer { text-align:center; color:var(--muted); font-size:12.5px; padding:24px; 
     <p class="sub">Static snapshot of the live demand-intelligence app. Ranked by documented trend score — momentum over static popularity.</p>
     <div class="sources" id="sources"></div>
     <div class="filters">
+      <button class="pill active" data-r="Global">🌍 Global</button>
+      <button class="pill" data-r="United States">🇺🇸 US</button>
+      <button class="pill" data-r="United Kingdom">🇬🇧 UK</button>
+      <button class="pill" data-r="Germany">🇩🇪 Germany</button>
+      <button class="pill" data-r="India">🇮🇳 India</button>
+      <button class="pill" data-r="Brazil">🇧🇷 Brazil</button>
       <button class="pill active" data-t="all">All</button>
       <button class="pill" data-t="movie">Movies</button>
       <button class="pill" data-t="series">Series</button>
@@ -136,13 +142,20 @@ footer { text-align:center; color:var(--muted); font-size:12.5px; padding:24px; 
 <footer>All metrics carry source, region, period and collection timestamp. Nothing is simulated — where a source does not provide a metric it shows “Data unavailable”.</footer>
 </div><!-- /.content -->
 <script>
-let DATA=null, filterType="all";
+let DATA=null, filterType="all", region="Global";
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fmt=(v,s="")=>(v===null||v===undefined)?`<span class="unavail">Data unavailable</span>`:`${v}${s}`;
 const arrow=p=>(p===null||p===undefined)?`<span class="flat">– unavailable</span>`:p>2?`<span class="up">↑ ${p}%</span>`:p<-2?`<span class="down">↓ ${Math.abs(p)}%</span>`:`<span class="flat">→ stable</span>`;
 const ago=ts=>{if(!ts)return"never";const s=(Date.now()-new Date(ts))/1000;return s<3600?`${Math.max(1,Math.round(s/60))} min ago`:s<86400?`${Math.round(s/3600)} hours ago`:`${Math.round(s/86400)} days ago`;};
 const typeBadge=t=>`<span class="badge type">${t==="series"?"TV Series":"Movie"}</span>`;
 
+function regionalLine(t){
+  if(region==="Global")return"";
+  const r=(t.regional||{})[region];
+  if(!r)return`<div class="meta" style="border-left:2px solid var(--accent2);padding-left:8px"><span class="unavail">${esc(region)}: not measured yet</span></div>`;
+  const avail=r.available_on&&r.available_on.length?`Watchable in ${esc(region)}: <b>${esc(r.available_on.join(", "))}</b>`:`<span class="unavail">No subscription provider in ${esc(region)} (per TMDB)</span>`;
+  return `<div class="meta" style="border-left:2px solid var(--accent2);padding-left:8px">${avail} · ${region} search trend: ${arrow(r.search_growth_pct)}</div>`;
+}
 function card(t){
   const poster=t.poster_url?`<img class="poster" src="${esc(t.poster_url)}" loading="lazy" onerror="this.style.visibility='hidden'">`:`<div class="poster"></div>`;
   return `<div class="card" onclick="detail(${t.id})">${poster}<div class="card-body">
@@ -150,6 +163,7 @@ function card(t){
     <div class="badges">${typeBadge(t.type)}${t.genres.slice(0,2).map(g=>`<span class="badge">${esc(g)}</span>`).join("")}</div>
     <div class="meta">Released: ${t.release_date??"unknown"} · Rating: ${fmt(t.rating,"/10")} · IMDb: ${fmt(t.imdb_rating,"/10")}</div>
     <div class="meta">Search trend: ${arrow(t.search_growth_pct)} · Interest: ${fmt(t.search_interest,"/100")} · Popularity: ${fmt(t.popularity)}</div>
+    ${regionalLine(t)}
     <span class="score-pill">Trend score ${t.trend_score} · ${esc(t.confidence)} confidence</span>
     <div class="prov">Source: <b>${esc(Object.values(t.provenance)[0]?.source??"n/a")}</b> · Updated: ${ago(t.last_updated)}</div>
   </div></div>`;
@@ -200,6 +214,10 @@ function detail(id){
 document.querySelectorAll(".pill[data-t]").forEach(p=>p.onclick=()=>{
   document.querySelectorAll(".pill[data-t]").forEach(x=>x.classList.toggle("active",x===p));
   filterType=p.dataset.t; render();
+});
+document.querySelectorAll(".pill[data-r]").forEach(p=>p.onclick=()=>{
+  document.querySelectorAll(".pill[data-r]").forEach(x=>x.classList.toggle("active",x===p));
+  region=p.dataset.r; render();
 });
 fetch("data.json").then(r=>r.json()).then(d=>{
   DATA=d;

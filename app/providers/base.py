@@ -11,6 +11,9 @@ class TitleData:
     title: str
     type: str                      # 'movie' | 'series'
     imdb_id: str | None = None       # cross-provider linkage (from TMDB external_ids)
+    # Region availability: {country_code: [subscription provider names]} from TMDB
+    # watch/providers. Meaning: "watchable in this country" — NOT "popular there".
+    watch_providers: dict = field(default_factory=dict)
     genres: list = field(default_factory=list)
     release_date: str | None = None
     overview: str | None = None

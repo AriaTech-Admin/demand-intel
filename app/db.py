@@ -67,6 +67,13 @@ CREATE TABLE IF NOT EXISTS ai_insights (
     model TEXT NOT NULL,
     generated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS availability (
+    title_id INTEGER NOT NULL REFERENCES titles(id),
+    region TEXT NOT NULL,               -- TMDB watch_region country code, e.g. 'US'
+    providers TEXT NOT NULL,            -- JSON list of subscription provider names
+    collected_at TEXT NOT NULL,
+    PRIMARY KEY(title_id, region)
+);
 CREATE INDEX IF NOT EXISTS idx_metrics_title ON metrics(title_id, metric_name, region, period);
 CREATE INDEX IF NOT EXISTS idx_snapshots_title ON snapshots(title_id, collected_at);
 """

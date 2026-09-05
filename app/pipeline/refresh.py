@@ -103,6 +103,16 @@ def _collect_and_score() -> dict:
                        VALUES(?,?,?,?,?,?,?, 'verified')""",
                     (title_id, "tmdb_popularity", t.popularity, "TMDB", "Global", "current", t.collected_at))
 
+            # Region availability (verified, source=TMDB watch providers):
+            # "watchable in country X" — never interpreted as popularity there.
+            for code, names in (t.watch_providers or {}).items():
+                db.execute(
+                    """INSERT INTO availability(title_id, region, providers, collected_at)
+                       VALUES(?,?,?,?)
+                       ON CONFLICT(title_id, region) DO UPDATE SET
+                         providers=excluded.providers, collected_at=excluded.collected_at""",
+                    (title_id, code, json.dumps(names), t.collected_at))
+
             # IMDb rating/votes from the official IMDb datasets (verified, real).
             if t.imdb_id:
                 db.execute("UPDATE titles SET imdb_id=? WHERE id=?", (t.imdb_id, title_id))

@@ -3,7 +3,7 @@
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 
-const state = { trendType: "all", demandType: "all", search: "" };
+const state = { trendType: "all", demandType: "all", search: "", region: "Global" };
 
 /* Theme: light / dark with localStorage + system preference */
 function applyTheme(t){
@@ -53,6 +53,19 @@ function provenanceLine(p) {
   return `Source: <b>${esc(prov.source)}</b> · Region: ${esc(prov.region)} · Updated: ${ago(prov.collected_at)}`;
 }
 
+function regionalLine(t) {
+  const r = t.regional;
+  if (state.region === "Global" || !r) return "";
+  const avail = r.available_on && r.available_on.length
+    ? `Watchable in ${esc(state.region)}: <b>${esc(r.available_on.join(", "))}</b>`
+    : `<span class="unavail">No subscription provider in ${esc(state.region)} (per TMDB)</span>`;
+  const growth = r.search_growth_pct === null || r.search_growth_pct === undefined
+    ? `Search trend ${esc(state.region)}: <span class="unavail">not measured yet</span>`
+    : `Search trend ${esc(state.region)}: ${arrow(r.search_growth_pct)}`;
+  return `<div class="trend-line regional" style="border-left:2px solid var(--accent2);padding-left:8px">
+    <div>${avail}</div><div>${growth}</div></div>`;
+}
+
 function card(t, opts = {}) {
   const poster = t.poster_url
     ? `<img class="poster" src="${esc(t.poster_url)}" alt="" loading="lazy" onerror="this.outerHTML='<div class=poster>🎬</div>'">`
@@ -67,13 +80,20 @@ function card(t, opts = {}) {
         <div>Interest: ${fmt(t.search_interest, "/100")} · Popularity: ${fmt(t.popularity)} ${arrow(opts.popDelta ?? null)}</div>
         ${t.trend_score !== undefined ? `<span class="score-pill">Trend score ${t.trend_score} · ${esc(t.confidence)} confidence</span>` : ""}
       </div>
+      ${regionalLine(t)}
       <div class="prov">${provenanceLine(t.provenance)} · ${ago(t.last_updated)}</div>
     </div></div>`;
 }
 
 async function loadTrending() {
-  const data = await get(`/api/trending?type=${state.trendType}`);
+  const data = await get(`/api/trending?type=${state.trendType}&region=${encodeURIComponent(state.region)}`);
   let titles = data.titles;
+  if (state.region !== "Global") {
+    // Keep titles with regional data first; still show the rest (honestly annotated).
+    titles = [...titles].sort((a, b) =>
+      (b.regional ? 1 : 0) - (a.regional ? 1 : 0));
+  }
+  if (data.region_note) $("#region-note").textContent = data.region_note;
   if (state.search) {
     const q = state.search.toLowerCase();
     titles = titles.filter(t => t.title.toLowerCase().includes(q));
@@ -303,6 +323,10 @@ $$(".nav-btn").forEach(b => b.onclick = () => {
 $$("#f-type .pill").forEach(p => p.onclick = () => {
   $$("#f-type .pill").forEach(x => x.classList.toggle("active", x === p));
   state.trendType = p.dataset.v; loadTrending();
+});
+$$("#f-region .pill").forEach(p => p.onclick = () => {
+  $$("#f-region .pill").forEach(x => x.classList.toggle("active", x === p));
+  state.region = p.dataset.r; loadTrending();
 });
 const demandTypes = [["all", "All"], ["movie", "Movies"], ["series", "Series"]];
 $("#d-type").innerHTML = demandTypes.map(([v, l], i) =>

@@ -19,15 +19,35 @@ SNAPSHOT = {"generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:
 db = sqlite3.connect(DB_PATH)
 db.row_factory = sqlite3.Row
 
+TREND_REGIONS = {"Global": "", "United States": "US", "United Kingdom": "GB",
+                 "Germany": "DE", "India": "IN", "Brazil": "BR"}
+
 def latest_metrics(title_id):
     rows = db.execute(
         """SELECT metric_name, value, source, region, period, collected_at, quality
            FROM metrics WHERE title_id=? ORDER BY collected_at DESC""", (title_id,)).fetchall()
     latest = {}
     for x in rows:
-        if x["metric_name"] not in latest and x["quality"] != "unavailable":
-            latest[x["metric_name"]] = dict(x)
+        key = x["metric_name"] if x["region"] == "Global" else f"{x['metric_name']}@{x['region']}"
+        if key not in latest and x["quality"] != "unavailable":
+            latest[key] = dict(x)
     return latest, rows[0]["collected_at"] if rows else None
+
+def regional_block(title_id):
+    """Per-country data for the UI selector: watchable-on + measured Trends growth."""
+    out = {}
+    for name, code in TREND_REGIONS.items():
+        if not code:
+            continue
+        avail = db.execute("SELECT providers FROM availability WHERE title_id=? AND region=?",
+                           (title_id, code)).fetchone()
+        g = db.execute("""SELECT value FROM metrics WHERE title_id=? AND region=?
+                          AND metric_name='search_growth_pct' AND value IS NOT NULL
+                          ORDER BY collected_at DESC LIMIT 1""", (title_id, name)).fetchone()
+        if avail or g:
+            out[name] = {"available_on": json.loads(avail["providers"]) if avail else None,
+                         "search_growth_pct": g["value"] if g else None}
+    return out
 
 titles = []
 for r in db.execute(
@@ -49,7 +69,8 @@ for r in db.execute(
         "search_interest": latest.get("search_interest", {}).get("value"),
         "search_growth_pct": latest.get("search_growth_pct", {}).get("value"),
         "provenance": {k: {kk: vv for kk, vv in v.items() if kk != "metric_name"}
-                       for k, v in latest.items()},
+                       for k, v in latest.items() if "@" not in k},
+        "regional": regional_block(r["id"]),
         "trend_score": r["trend_score"], "confidence": r["confidence"],
         "why_trending": json.loads(r["explanation"] or "[]"),
         "history": [dict(h) for h in hist],

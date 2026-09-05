@@ -102,3 +102,11 @@ async def _enrich(client, t: TitleData):
     ext_ids = d.get("external_ids") or {}
     if ext_ids.get("imdb_id"):
         t.imdb_id = ext_ids.get("imdb_id")
+    # Region availability: subscription (flatrate) providers per country.
+    wp = await _get_with_retry(client, f"{config.TMDB_BASE_URL}/{kind}/{t.provider_id}/watch/providers", params)
+    if wp is not None and wp.status_code == 200:
+        for code, entry in (wp.json().get("results") or {}).items():
+            flat = entry.get("flatrate") or []
+            names = sorted({p.get("provider_name", "") for p in flat if p.get("provider_name")})
+            if names:
+                t.watch_providers[code] = names

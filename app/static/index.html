@@ -36,8 +36,17 @@
   <!-- TRENDING -->
   <section id="view-trending" class="view">
     <h1>What’s Trending</h1>
-    <p class="sub">Titles ranked by the configured trend score. Momentum over static popularity.</p>
+    <p class="sub" id="region-note">Titles ranked by the configured trend score. Momentum over static popularity.</p>
     <div class="filters">
+      <div class="filter-group" id="f-region">
+        <span class="fl">Country</span>
+        <button data-r="Global" class="pill active">🌍 Global</button>
+        <button data-r="United States" class="pill">🇺🇸 US</button>
+        <button data-r="United Kingdom" class="pill">🇬🇧 UK</button>
+        <button data-r="Germany" class="pill">🇩🇪 Germany</button>
+        <button data-r="India" class="pill">🇮🇳 India</button>
+        <button data-r="Brazil" class="pill">🇧🇷 Brazil</button>
+      </div>
       <div class="filter-group" id="f-type">
         <span class="fl">Type</span>
         <button data-v="all" class="pill active">All</button>

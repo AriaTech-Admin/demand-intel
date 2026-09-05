@@ -66,8 +66,45 @@ def _title_row(db, r) -> dict:
 
 # ---------------- API ----------------
 
+# Region-aware What's Trending: countries offered in the UI selector.
+TREND_REGIONS = {"Global": "", "United States": "US", "United Kingdom": "GB",
+                 "Germany": "DE", "India": "IN", "Brazil": "BR"}
+
+
+def _regional_block(db, title_id: int, region_name: str) -> dict | None:
+    """Per-region annotation for a title. Every piece keeps its own provenance.
+    availability = 'watchable in region' (TMDB) — NOT popularity there."""
+    code = TREND_REGIONS.get(region_name, "")
+    if not code:
+        return None
+    avail = db.execute("SELECT providers, collected_at FROM availability WHERE title_id=? AND region=?",
+                       (title_id, code)).fetchone()
+    m = db.execute(
+        """SELECT metric_name, value, source, region, period, collected_at, quality
+           FROM metrics WHERE title_id=? AND region=? AND quality != 'unavailable'
+             AND metric_name IN ('search_interest','search_growth_pct')
+           ORDER BY collected_at DESC""", (title_id, region_name)).fetchall()
+    latest = {}
+    for x in m:
+        latest.setdefault(x["metric_name"], dict(x))
+    if not latest and not avail:
+        return None
+    return {
+        "region": region_name,
+        "available_on": json.loads(avail["providers"]) if avail else None,
+        "availability_updated": avail["collected_at"] if avail else None,
+        "search_interest": latest.get("search_interest", {}).get("value"),
+        "search_growth_pct": latest.get("search_growth_pct", {}).get("value"),
+        "provenance": {k: {kk: vv for kk, vv in v.items() if kk != "metric_name"}
+                       for k, v in latest.items()},
+    }
+
+
 @app.get("/api/trending")
-def trending(type: str = Query("all", pattern="^(all|movie|series)$"), limit: int = 24):
+def trending(type: str = Query("all", pattern="^(all|movie|series)$"), limit: int = 24,
+             region: str = "Global"):
+    if region not in TREND_REGIONS:
+        raise HTTPException(400, f"region must be one of {list(TREND_REGIONS)}")
     with get_db() as db:
         sql = """SELECT t.*, sc.trend_score, sc.confidence, sc.explanation, sc.computed_at
                  FROM titles t JOIN scores sc ON sc.title_id=t.id"""
@@ -89,8 +126,17 @@ def trending(type: str = Query("all", pattern="^(all|movie|series)$"), limit: in
                 "WHERE title_id=? AND search_interest IS NOT NULL ORDER BY collected_at",
                 (r["id"],)).fetchall()
             base["interest_history"] = [x["search_interest"] for x in hist_rows]
+            if region != "Global":
+                base["regional"] = _regional_block(db, r["id"], region)
             titles.append(base)
         return {"titles": titles,
+            "region": region,
+            "regions": list(TREND_REGIONS),
+            "region_note": ("Trending globally; filtered by what is watchable in "
+                            f"{region}, plus Google Trends growth measured in {region}. "
+                            "TMDB popularity itself is global, not per-country.")
+                            if region != "Global" else
+                            "Trending globally (TMDB weekly). Popularity is a global metric.",
             "tmdb_configured": bool(config.TMDB_API_KEY)}
 
 
