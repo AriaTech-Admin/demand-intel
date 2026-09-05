@@ -4,18 +4,30 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ariana Tools — Demand Intelligence</title>
-<link rel="stylesheet" href="/static/style.css?v=4">
+<link rel="stylesheet" href="/static/style.css?v=5">
 <script>(function(){try{var t=localStorage.getItem("theme");if(!t) t=window.matchMedia("(prefers-color-scheme: light)").matches?"light":"dark";document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
 </head>
 <body>
-<header>
-  <div class="brand"><span class="logo">📈</span> Ariana Tools <span style="color:var(--muted);font-weight:400">· Demand Intelligence</span></div>
-  <nav>
-    <button class="nav-btn active" data-view="trending">Trending Now</button>
-    <button class="nav-btn" data-view="demand">Search Demand</button>
-    <button class="nav-btn" data-view="interest">Interest Trends</button>
-    <button class="nav-btn" data-view="integrity">Data Integrity</button>
+<aside class="sidebar">
+  <div class="side-brand">
+    <span class="logo">📈</span>
+    <div>
+      <div class="side-title">Demand Intelligence</div>
+      <div class="side-sub">Ariana Tools</div>
+    </div>
+  </div>
+  <nav class="side-nav">
+    <button class="nav-btn active" data-view="trending">📊 Trending Now</button>
+    <button class="nav-btn" data-view="demand">🔍 Search Demand</button>
+    <button class="nav-btn" data-view="interest">📈 Interest Trends</button>
+    <button class="nav-btn" data-view="integrity">🛡 Data Integrity</button>
   </nav>
+  <div class="side-footer">
+    <div class="side-note">Real data only · provenance on every metric</div>
+  </div>
+</aside>
+<div class="content">
+<header>
   <div class="head-right">
     <button id="theme-toggle" title="Toggle light/dark" aria-label="Toggle theme">☾</button>
     <input id="search" type="search" placeholder="Search titles…">
@@ -122,7 +134,8 @@
   All metrics carry their source, region, period, and collection timestamp. No data is simulated.
   Where a source does not provide a metric, it is shown as “Data unavailable”.
 </footer>
+</div><!-- /.content -->
 
-<script src="/static/app.js?v=4"></script>
+<script src="/static/app.js?v=5"></script>
 </body>
 </html>
