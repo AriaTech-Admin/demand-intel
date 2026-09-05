@@ -296,9 +296,9 @@ $("#modal").onclick = (e) => { if (e.target.id === "modal") $("#modal").classLis
 $$(".nav-btn").forEach(b => b.onclick = () => {
   $$(".nav-btn").forEach(x => x.classList.toggle("active", x === b));
   $$(".view").forEach(v => v.classList.add("hidden"));
-  const view = { trending: "view-trending", demand: "view-demand", interest: "view-interest" }[b.dataset.view];
+  const view = { trending: "view-trending", demand: "view-demand", interest: "view-interest", integrity: "view-integrity" }[b.dataset.view];
   $("#" + view).classList.remove("hidden");
-  ({ trending: loadTrending, demand: loadDemand, interest: loadInterest })[b.dataset.view]();
+  ({ trending: loadTrending, demand: loadDemand, interest: loadInterest, integrity: () => {} })[b.dataset.view]();
 });
 $$("#f-type .pill").forEach(p => p.onclick = () => {
   $$("#f-type .pill").forEach(x => x.classList.toggle("active", x === p));

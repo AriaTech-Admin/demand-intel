@@ -164,3 +164,15 @@ footer { text-align: center; color: var(--muted); font-size: 12.5px; padding: 24
   display: grid; place-items: center; transition: background .2s, transform .12s;
 }
 #theme-toggle:hover { transform: scale(1.06); border-color: var(--accent2); }
+
+/* Data Integrity view */
+.integrity-card {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  padding: 18px 20px; margin-bottom: 16px; max-width: 860px;
+}
+.integrity-card h3 { font-size: 15px; margin-bottom: 8px; color: var(--accent2); }
+.integrity-card p, .integrity-card li { font-size: 14px; color: var(--text); }
+.integrity-card ul { margin: 6px 0 0 20px; }
+.integrity-card li { margin-bottom: 6px; }
+.integrity-card a { color: var(--accent2); }
+.integrity-card code { background: #21262d; border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; font-size: 12.5px; }
