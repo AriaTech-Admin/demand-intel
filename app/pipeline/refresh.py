@@ -127,7 +127,9 @@ def _collect_and_score() -> dict:
                            VALUES(?,?,?,?,?,?,?, 'verified')""",
                         (title_id, "imdb_votes", r[1], imdb.name, "Global", "current", t.collected_at))
 
-        # Search-demand measurements (round-robin by oldest Trends collection to cycle all titles in 2 refreshes)
+        # Search-demand measurements, batched: up to 5 titles per single Trends
+        # call, so one refresh covers the top ~20 titles across ALL configured
+        # geos with only ~24 calls (single-title mode needed ~120 for the same).
         measured = [t for t in validated if t.popularity is not None]
         # Build map of last search_interest collection per title_id
         last_map = {}
@@ -148,31 +150,52 @@ def _collect_and_score() -> dict:
         geos = config.get_trends_geos()
         # Only configured timeframes are collected — never auto-invent 24h/30d/90d.
         periods = config.get_trends_periods()
-        # Limit to avoid 429: max titles split across geo x period combos; sleep happens inside provider
-        combos = max(1, len(geos) * len(periods))
-        max_titles_per_geo = 20 if combos == 1 else max(5, 20 // combos)
-        for t in measured[:max_titles_per_geo]:
-            row = db.execute("SELECT id FROM titles WHERE provider=? AND provider_id=? AND type=?",
+        MAX_TITLES_PER_REFRESH = 20     # 4 batched calls of 5 per geo
+        batch = measured[:MAX_TITLES_PER_REFRESH]
+        # resolve title names once
+        name_of = {}
+        tid_of = {}
+        for t in batch:
+            row = db.execute("SELECT id, title FROM titles WHERE provider=? AND provider_id=? AND type=?",
                              (t.provider, t.provider_id, t.type)).fetchone()
-            title_id = row["id"]
-            title_name = db.execute("SELECT title FROM titles WHERE id=?", (title_id,)).fetchone()["title"]
-            for geo in geos:
+            if row:
+                name_of[t.title] = row["title"]
+                tid_of[t.title] = row["id"]
+        names = list(name_of.values())
+        import time as _time
+        throttled = False
+        for i in range(0, len(names), 5):
+            chunk = names[i:i + 5]
+            for gi, geo in enumerate(geos):
+                if gi:
+                    _time.sleep(8)             # space out geo calls to dodge 429s
                 for period_tf in periods:
-                    for sig in trends.get_signals(title_name, geo=geo,
-                                                  period=period_tf):
-                        quality = "verified" if sig.value is not None else "unavailable"
-                        db.execute(
-                            """INSERT INTO metrics(title_id, metric_name, value, source, region, period, collected_at, quality)
-                               VALUES(?,?,?,?,?,?,?,?)""",
-                            (title_id, sig.metric_name, sig.value, sig.source, sig.region, sig.period,
-                             sig.collected_at, quality))
-                        if sig.metric_name == "search_interest" and sig.value is not None:
-                            db.execute("INSERT INTO snapshots(title_id, search_interest, collected_at) VALUES(?,?,?)",
-                                       (title_id, sig.value, sig.collected_at))
-                        detail["trends_signals"] += 1
-                        if sig.metric_name == "search_growth_pct" and sig.value is not None \
-                                and sig.value >= ALERT_GROWTH_THRESHOLD:
-                            detail["alerts"] += 1   # surfaced by GET /api/alerts from real metrics
+                    batch_sigs = trends.get_signals_batch(chunk, geo=geo, period=period_tf)
+                    if batch_sigs is None:
+                        # sustained 429 — Google is throttling this IP; stop the
+                        # Trends part of this refresh entirely to let the
+                        # throttle window reset instead of burning more quota.
+                        log.warning("Trends throttled (geo=%s) — skipping remaining Trends work this refresh", geo)
+                        throttled = True
+                        break
+                    for t_name, sigs in batch_sigs.items():
+                        title_id = tid_of[t_name]
+                        for sig in sigs:
+                            quality = "verified" if sig.value is not None else "unavailable"
+                            db.execute(
+                                """INSERT INTO metrics(title_id, metric_name, value, source, region, period, collected_at, quality)
+                                   VALUES(?,?,?,?,?,?,?,?)""",
+                                (title_id, sig.metric_name, sig.value, sig.source, sig.region, sig.period,
+                                 sig.collected_at, quality))
+                            if sig.metric_name == "search_interest" and sig.value is not None:
+                                db.execute("INSERT INTO snapshots(title_id, search_interest, collected_at) VALUES(?,?,?)",
+                                           (title_id, sig.value, sig.collected_at))
+                            detail["trends_signals"] += 1
+                            if sig.metric_name == "search_growth_pct" and sig.value is not None \
+                                    and sig.value >= ALERT_GROWTH_THRESHOLD:
+                                detail["alerts"] += 1   # surfaced by GET /api/alerts from real metrics
+            if throttled:
+                break
 
     compute_and_store_scores()
     return detail

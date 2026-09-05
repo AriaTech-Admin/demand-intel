@@ -101,6 +101,62 @@ class GoogleTrendsProvider(SearchDemandProvider):
         time.sleep(random.uniform(1.0, 2.0))   # be polite to the upstream service (increased to avoid 429)
         return signals
 
+    def get_signals_batch(self, titles: list[str], geo: str = "",
+                          period: str = "now 7-d") -> dict[str, list[SearchSignal]]:
+        """Measure up to 5 titles in ONE Trends call (batched payload).
+        Trends' relative interest is comparable across keywords within one
+        payload, so batching cuts HTTP calls ~5x — what makes per-country
+        coverage affordable without tripping rate limits. Titles that don't
+        resolve stay unavailable (never fabricated).
+        Returns None when the call itself failed (e.g. sustained 429) so the
+        caller can back off instead of burning more quota this cycle."""
+        titles = [t for t in titles if t][:5]
+        collected = _now()
+        region = _region_name(geo)
+        period_label = _period_label(period)
+        out: dict[str, list[SearchSignal]] = {
+            t: [SearchSignal("search_interest", None, self.name, region, period_label, collected),
+                SearchSignal("search_growth_pct", None, self.name, region, period_label, collected)]
+            for t in titles
+        }
+        if not HAS_PYTRENDS or not titles:
+            return out
+        df = None
+        for attempt in range(3):
+            try:
+                pytrends = TrendReq(hl="en-US", tz=0, timeout=(10, 30))
+                pytrends.build_payload(titles, timeframe=period, geo=geo)
+                df = pytrends.interest_over_time()
+                break
+            except Exception as e:
+                if "429" in str(e) and attempt < 2:
+                    wait = (2 ** attempt) * 6 + random.uniform(0, 3)
+                    log.warning("Google Trends batch 429 (geo=%s) — retry %d/2 after %.0fs",
+                                geo, attempt + 1, wait)
+                    time.sleep(wait)
+                    continue
+                log.warning("Google Trends batch query failed (%r, geo=%s): %s", titles, geo, e)
+                return None
+        for t in titles:
+            if t not in df.columns:
+                continue                       # stays unavailable
+            series = df[t].astype(float)
+            interest = float(series.iloc[-1])
+            n = len(series)
+            if n >= 6:
+                third = max(1, n // 3)
+                recent = series.iloc[-third:].mean()
+                prior = series.iloc[-2 * third:-third].mean()
+                growth_pct = round((recent - prior) / prior * 100, 1) if prior > 0 else None
+            else:
+                growth_pct = None
+            out[t] = [
+                SearchSignal("search_interest", interest, self.name, region, period_label, collected),
+                SearchSignal("search_growth_pct", growth_pct, self.name, region, period_label, collected),
+            ]
+        time.sleep(random.uniform(1.0, 2.0))   # be polite to the upstream service
+        return out
+
     _related_cache: dict[str, tuple[float, list[str]]] = {}
     _CACHE_TTL = 3600  # 1 hour - avoids hammering Trends on every detail open
 

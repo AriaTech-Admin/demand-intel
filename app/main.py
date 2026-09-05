@@ -112,8 +112,10 @@ def trending(type: str = Query("all", pattern="^(all|movie|series)$"), limit: in
         if type != "all":
             sql += " WHERE t.type=?"
             params.append("series" if type == "series" else "movie")
+        # Fetch a wider pool than requested: regional ranking happens in Python
+        # after annotation, then we slice to `limit`.
         sql += " ORDER BY sc.trend_score DESC LIMIT ?"
-        params.append(limit)
+        params.append(max(limit * 3, 60))
         rows = db.execute(sql, params).fetchall()
         titles = []
         for r in rows:
@@ -129,12 +131,25 @@ def trending(type: str = Query("all", pattern="^(all|movie|series)$"), limit: in
             if region != "Global":
                 base["regional"] = _regional_block(db, r["id"], region)
             titles.append(base)
+        if region != "Global":
+            # Regional ranking: measured growth in the selected country leads;
+            # then watchable-in-country; unmeasured titles fall back to global
+            # score at the bottom — honestly annotated per card.
+            def rank_key(t):
+                reg = t.get("regional") or {}
+                g = reg.get("search_growth_pct")
+                avail = 1 if reg.get("available_on") else 0
+                measured = 1 if g is not None else 0
+                return (measured, g if g is not None else -10**9, avail, t["trend_score"] or 0)
+            titles.sort(key=rank_key, reverse=True)
+            titles = titles[:limit]
         return {"titles": titles,
             "region": region,
             "regions": list(TREND_REGIONS),
-            "region_note": ("Trending globally; filtered by what is watchable in "
-                            f"{region}, plus Google Trends growth measured in {region}. "
-                            "TMDB popularity itself is global, not per-country.")
+            "region_note": (f"Ranked by measured Google Trends growth in {region}; "
+                            "then by what is watchable there (TMDB). Titles without "
+                            "regional measurements yet are annotated honestly and "
+                            "ranked last. TMDB popularity itself is global.")
                             if region != "Global" else
                             "Trending globally (TMDB weekly). Popularity is a global metric.",
             "tmdb_configured": bool(config.TMDB_API_KEY)}

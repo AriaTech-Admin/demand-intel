@@ -170,6 +170,12 @@ function card(t){
 }
 function render(){
   const list=DATA.titles.filter(t=>filterType==="all"||t.type===filterType);
+  if(region!=="Global"){
+    // regional ranking: measured growth in country first, then watchable, then global score
+    const rk=t=>{const r=(t.regional||{})[region]||{};const g=r.search_growth_pct;
+      return (g!==null&&g!==undefined?1:0)*4 + (g??-1e9) + (r.available_on?0.5:0);};
+    list.sort((a,b)=>rk(b)-rk(a));
+  }
   document.getElementById("grid").innerHTML=list.map(card).join("")||`<p class="sub">No titles.</p>`;
   document.getElementById("ilist").innerHTML=list.map(t=>{
     const s=(t.history||[]).map(h=>h.search_interest).filter(v=>v!=null);

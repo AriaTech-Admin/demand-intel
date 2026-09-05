@@ -87,12 +87,7 @@ function card(t, opts = {}) {
 
 async function loadTrending() {
   const data = await get(`/api/trending?type=${state.trendType}&region=${encodeURIComponent(state.region)}`);
-  let titles = data.titles;
-  if (state.region !== "Global") {
-    // Keep titles with regional data first; still show the rest (honestly annotated).
-    titles = [...titles].sort((a, b) =>
-      (b.regional ? 1 : 0) - (a.regional ? 1 : 0));
-  }
+  let titles = data.titles;   // server already ranks regionally
   if (data.region_note) $("#region-note").textContent = data.region_note;
   if (state.search) {
     const q = state.search.toLowerCase();
