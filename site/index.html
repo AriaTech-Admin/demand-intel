@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ariana Tools — Demand Intelligence</title>
+<title>Ariana Tools</title>
 <style>
 :root { --bg:#0d1117; --panel:#161b22; --border:#30363d; --text:#e6edf3; --muted:#8b949e;
   --accent:#3fb950; --accent2:#58a6ff; --down:#f85149; }
@@ -73,7 +73,7 @@ footer { text-align:center; color:var(--muted); font-size:12.5px; padding:24px; 
   background:var(--panel); border-right:1px solid var(--border);
   display:flex; flex-direction:column; padding:20px 14px; gap:22px; }
 .side-brand { display:flex; align-items:center; gap:10px; padding:0 6px; }
-.side-brand .slogo { font-size:24px; }
+.side-logo { width:34px; height:34px; border-radius:8px; object-fit:cover; }
 .side-title { font-weight:700; font-size:16px; line-height:1.2; }
 .side-sub { font-size:12px; color:var(--muted); }
 .side-nav { display:flex; flex-direction:column; gap:6px; }
@@ -102,18 +102,15 @@ footer { text-align:center; color:var(--muted); font-size:12.5px; padding:24px; 
 <body>
 <aside class="sidebar">
   <div class="side-brand">
-    <span class="slogo">📈</span>
+    <img class="side-logo" src="logo.png" alt="Ariana Tools logo">
     <div>
-      <div class="side-title">Demand Intelligence</div>
-      <div class="side-sub">Ariana Tools</div>
+      <div class="side-title">Ariana Tools</div>
     </div>
   </div>
   <nav class="side-nav">
-    <button class="nav-btn active" data-v="trending">📊 Trending Now</button>
-    <button class="nav-btn" data-v="interest">📈 Interest Trends</button>
-    <button class="nav-btn" data-v="integrity">🛡 Data Integrity</button>
+    <button class="nav-btn active" data-v="trending">📊 What’s Trending</button>
   </nav>
-  <div class="side-footer"><div class="side-note">Static snapshot · real data only · provenance on every metric</div></div>
+  <div class="side-footer"><div class="side-note">Real data only · provenance on every metric</div></div>
 </aside>
 <div class="content">
 <header>
@@ -121,7 +118,7 @@ footer { text-align:center; color:var(--muted); font-size:12.5px; padding:24px; 
 </header>
 <main>
   <section id="view-trending">
-    <h1>Trending Now</h1>
+    <h1>What’s Trending</h1>
     <p class="sub">Static snapshot of the live demand-intelligence app. Ranked by documented trend score — momentum over static popularity.</p>
     <div class="sources" id="sources"></div>
     <div class="filters">
@@ -130,35 +127,6 @@ footer { text-align:center; color:var(--muted); font-size:12.5px; padding:24px; 
       <button class="pill" data-t="series">Series</button>
     </div>
     <div id="grid" class="grid"></div>
-  </section>
-  <section id="view-interest" class="hidden">
-    <h1>Watch / Interest Trends</h1>
-    <p class="sub">Direction of interest from real collected snapshots only. No synthetic history.</p>
-    <div id="ilist"></div>
-  </section>
-  <section id="view-integrity" class="hidden">
-    <h1>Data Integrity & Verification</h1>
-    <p class="sub">How this app proves its numbers are real — and how you can independently verify every one of them.</p>
-    <div class="icard"><h3>1 · Every number carries its own evidence</h3>
-      <p>Every metric is stored with four fields: <b>source</b>, <b>geographic region</b>, <b>time period</b>, and <b>collection timestamp</b>. Open any title's detail page and read the provenance table. If those fields were missing, the number would not be displayed at all.</p></div>
-    <div class="icard"><h3>2 · You can re-verify every source yourself — right now, for free</h3>
-      <ul>
-        <li><b>TMDB</b> — metadata, rating, popularity. Call the same public API and compare: our stored value must match exactly, because we store what the API returned, unmodified.</li>
-        <li><b>IMDb ratings & votes</b> — from IMDb's own free official dataset at <a href="https://datasets.imdbws.com" target="_blank" rel="noopener">datasets.imdbws.com</a>. Download <code>title.ratings.tsv.gz</code>, look up the IMDb id shown on our detail pages, and compare.</li>
-        <li><b>Google Trends</b> — search the same title at trends.google.com and observe the same relative-interest pattern for the last 7 days.</li>
-      </ul></div>
-    <div class="icard"><h3>3 · The app is structurally unable to invent data</h3>
-      <p>The database schema <b>rejects</b> any metric without a source and collection timestamp. When a provider fails, the app shows <i>"Data unavailable"</i> — it never interpolates, estimates, or fabricates values. Charts are drawn only from snapshots actually collected at listed timestamps; no synthetic history exists.</p></div>
-    <div class="icard"><h3>4 · Honest, documented limitations</h3>
-      <ul>
-        <li><b>Google Trends gives relative interest (0–100)</b> within a query window, not absolute search counts — labeled as such.</li>
-        <li><b>TMDB popularity</b> is TMDB's own metric — not viewership; this app never claims "views".</li>
-        <li><b>Values drift by design</b> — sources are live; that's why every value carries its collection-time stamp.</li>
-        <li><b>Rotten Tomatoes & Letterboxd</b> have no official public API → shown as "Data unavailable", never estimated.</li>
-        <li>Google Trends is queried via an unofficial client and is occasionally rate-limited; such runs simply collect nothing.</li>
-      </ul></div>
-    <div class="icard"><h3>5 · How to challenge a specific number</h3>
-      <p>Pick any title, note its provenance (source + timestamp), then query that source directly. If the source shows a different value, the collection-time stamp explains the difference. A value that cannot be reproduced from any source would be a genuine bug — and the architecture makes such a bug auditable.</p></div>
   </section>
 </main>
 <div id="modal" class="modal hidden"><div class="modal-card">
@@ -228,12 +196,7 @@ function detail(id){
     <div class="section"><h3>Last updated</h3><div>${ago(t.last_updated)} (${esc(t.last_updated||"")} UTC)</div></div>`;
   document.getElementById("modal").classList.remove("hidden");
 }
-document.querySelectorAll(".nav-btn").forEach(b=>b.onclick=()=>{
-  document.querySelectorAll(".nav-btn").forEach(x=>x.classList.toggle("active",x===b));
-  document.getElementById("view-trending").classList.toggle("hidden",b.dataset.v!=="trending");
-  document.getElementById("view-interest").classList.toggle("hidden",b.dataset.v!=="interest");
-  document.getElementById("view-integrity").classList.toggle("hidden",b.dataset.v!=="integrity");
-});
+
 document.querySelectorAll(".pill[data-t]").forEach(p=>p.onclick=()=>{
   document.querySelectorAll(".pill[data-t]").forEach(x=>x.classList.toggle("active",x===p));
   filterType=p.dataset.t; render();

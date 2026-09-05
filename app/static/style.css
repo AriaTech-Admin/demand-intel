@@ -44,9 +44,8 @@ header {
   display: flex; flex-direction: column; padding: 20px 14px; gap: 22px;
 }
 .side-brand { display: flex; align-items: center; gap: 10px; padding: 0 6px; }
-.side-brand .logo { font-size: 24px; }
-.side-title { font-weight: 700; font-size: 16px; line-height: 1.2; }
-.side-sub { font-size: 12px; color: var(--muted); }
+.side-logo { width: 34px; height: 34px; border-radius: 8px; object-fit: cover; }
+.side-title { font-weight: 700; font-size: 17px; line-height: 1.2; }
 .side-nav { display: flex; flex-direction: column; gap: 6px; }
 .side-nav .nav-btn {
   display: block; width: 100%; text-align: left; font-size: 14.5px; padding: 10px 14px;
