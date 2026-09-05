@@ -38,7 +38,7 @@ def _title_row(db, r) -> dict:
     for x in m:                                   # keep most recent per metric
         if x["metric_name"] not in latest and x["quality"] != "unavailable":
             latest[x["metric_name"]] = dict(x)
-    last_metric_at = m[0]["collected_at"] if m else r.get("collected_at")
+    last_metric_at = m[0]["collected_at"] if m else None
     return {
         "id": r["id"],
         "title": r["title"],

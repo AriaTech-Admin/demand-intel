@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demand Intelligence — Movies & Series</title>
+<style>
+:root { --bg:#0d1117; --panel:#161b22; --border:#30363d; --text:#e6edf3; --muted:#8b949e;
+  --accent:#3fb950; --accent2:#58a6ff; --down:#f85149; }
+* { box-sizing:border-box; margin:0; }
+body { background:var(--bg); color:var(--text); font:15px/1.5 -apple-system,"Segoe UI",Roboto,sans-serif; }
+header { display:flex; align-items:center; gap:20px; flex-wrap:wrap; padding:14px 24px;
+  border-bottom:1px solid var(--border); }
+.brand { font-weight:700; font-size:17px; }
+.snapchip { font-size:12px; color:#d29922; border:1px solid #9e6a03; border-radius:999px; padding:4px 10px; }
+nav { display:flex; gap:6px; margin-left:auto; flex-wrap:wrap; }
+.nav-btn { background:none; border:1px solid transparent; color:var(--muted); padding:7px 14px;
+  border-radius:8px; cursor:pointer; font-size:14px; }
+.nav-btn.active { background:#21262d; color:var(--text); border-color:var(--border); }
+main { max-width:1240px; margin:0 auto; padding:28px 24px 60px; }
+h1 { font-size:24px; margin-bottom:4px; }
+.sub { color:var(--muted); margin-bottom:20px; }
+.hidden { display:none !important; }
+.filters { display:flex; flex-wrap:wrap; gap:16px; margin-bottom:22px; }
+.pill { background:#21262d; border:1px solid var(--border); color:var(--muted);
+  border-radius:999px; padding:5px 14px; cursor:pointer; font-size:13px; }
+.pill.active { background:var(--accent2); border-color:var(--accent2); color:#06111f; font-weight:600; }
+.grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:18px; }
+.card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px;
+  cursor:pointer; display:flex; gap:14px; transition:transform .12s,border-color .12s; }
+.card:hover { transform:translateY(-3px); border-color:var(--accent2); }
+.poster { width:92px; min-height:130px; border-radius:8px; background:#21262d; object-fit:cover; flex-shrink:0; }
+.card-body { flex:1; min-width:0; display:flex; flex-direction:column; gap:5px; }
+.card-title { font-weight:700; font-size:16px; }
+.meta { color:var(--muted); font-size:13px; }
+.badge { font-size:11px; border-radius:6px; padding:2px 8px; background:#21262d;
+  border:1px solid var(--border); color:var(--muted); }
+.badge.type { color:var(--accent2); }
+.badges { display:flex; gap:6px; flex-wrap:wrap; margin:3px 0; }
+.up { color:var(--accent); } .down { color:var(--down); } .flat { color:var(--muted); }
+.unavail { color:var(--muted); font-style:italic; }
+.score-pill { align-self:flex-start; font-size:12px; font-weight:700; background:#123322;
+  color:var(--accent); border:1px solid #1d4428; border-radius:999px; padding:2px 10px; }
+.prov { margin-top:auto; padding-top:8px; border-top:1px solid var(--border); font-size:11.5px; color:var(--muted); }
+.prov b { color:var(--text); }
+.spark { width:120px; height:34px; flex-shrink:0; }
+.irow { display:flex; align-items:center; gap:14px; background:var(--panel); border:1px solid var(--border);
+  border-radius:12px; padding:14px 18px; cursor:pointer; margin-bottom:10px; flex-wrap:wrap; }
+.irow:hover { border-color:var(--accent2); }
+.dir { font-weight:700; min-width:130px; }
+.sources { margin:14px 0 22px; font-size:13px; color:var(--muted); }
+.sources a { color:var(--accent2); text-decoration:none; }
+.modal { position:fixed; inset:0; background:rgba(0,0,0,.7); display:flex; align-items:flex-start;
+  justify-content:center; padding:40px 16px; overflow-y:auto; z-index:50; }
+.modal-card { position:relative; background:var(--panel); border:1px solid var(--border);
+  border-radius:14px; max-width:760px; width:100%; padding:28px; }
+.close-btn { position:absolute; top:14px; right:14px; background:#21262d; border:1px solid var(--border);
+  color:var(--text); border-radius:8px; width:32px; height:32px; cursor:pointer; }
+.detail-head { display:flex; gap:20px; margin-bottom:18px; flex-wrap:wrap; }
+.detail-head .poster { width:140px; min-height:200px; }
+.detail-head h2 { font-size:22px; margin-bottom:4px; }
+.section { margin:18px 0; }
+.section h3 { font-size:14px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-bottom:8px; }
+.bar-wrap { background:#21262d; border-radius:6px; height:12px; overflow:hidden; max-width:420px; }
+.bar { height:100%; background:linear-gradient(90deg,var(--accent2),var(--accent)); }
+table { width:100%; border-collapse:collapse; font-size:13px; margin-top:6px; }
+th,td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); }
+th { color:var(--muted); font-weight:500; }
+.why li { margin:4px 0 4px 18px; }
+footer { text-align:center; color:var(--muted); font-size:12.5px; padding:24px; border-top:1px solid var(--border); }
+.ago { font-size:11.5px; color:var(--muted); }
+@media (max-width:640px){ .detail-head{flex-direction:column;} .card{flex-direction:column;} .poster{width:100%;height:160px;} }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">📈 Demand Intelligence</div>
+  <span class="snapchip" id="snapchip">static snapshot</span>
+  <nav>
+    <button class="nav-btn active" data-v="trending">Trending Now</button>
+    <button class="nav-btn" data-v="interest">Interest Trends</button>
+  </nav>
+</header>
+<main>
+  <section id="view-trending">
+    <h1>Trending Now</h1>
+    <p class="sub">Static snapshot of the live demand-intelligence app. Ranked by documented trend score — momentum over static popularity.</p>
+    <div class="sources" id="sources"></div>
+    <div class="filters">
+      <button class="pill active" data-t="all">All</button>
+      <button class="pill" data-t="movie">Movies</button>
+      <button class="pill" data-t="series">Series</button>
+    </div>
+    <div id="grid" class="grid"></div>
+  </section>
+  <section id="view-interest" class="hidden">
+    <h1>Watch / Interest Trends</h1>
+    <p class="sub">Direction of interest from real collected snapshots only. No synthetic history.</p>
+    <div id="ilist"></div>
+  </section>
+</main>
+<div id="modal" class="modal hidden"><div class="modal-card">
+  <button class="close-btn" onclick="document.getElementById('modal').classList.add('hidden')">✕</button>
+  <div id="modal-body"></div>
+</div></div>
+<footer>All metrics carry source, region, period and collection timestamp. Nothing is simulated — where a source does not provide a metric it shows “Data unavailable”.</footer>
+<script>
+let DATA=null, filterType="all";
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmt=(v,s="")=>(v===null||v===undefined)?`<span class="unavail">Data unavailable</span>`:`${v}${s}`;
+const arrow=p=>(p===null||p===undefined)?`<span class="flat">– unavailable</span>`:p>2?`<span class="up">↑ ${p}%</span>`:p<-2?`<span class="down">↓ ${Math.abs(p)}%</span>`:`<span class="flat">→ stable</span>`;
+const ago=ts=>{if(!ts)return"never";const s=(Date.now()-new Date(ts))/1000;return s<3600?`${Math.max(1,Math.round(s/60))} min ago`:s<86400?`${Math.round(s/3600)} hours ago`:`${Math.round(s/86400)} days ago`;};
+const typeBadge=t=>`<span class="badge type">${t==="series"?"TV Series":"Movie"}</span>`;
+
+function card(t){
+  const poster=t.poster_url?`<img class="poster" src="${esc(t.poster_url)}" loading="lazy" onerror="this.style.visibility='hidden'">`:`<div class="poster"></div>`;
+  return `<div class="card" onclick="detail(${t.id})">${poster}<div class="card-body">
+    <div class="card-title">${esc(t.title)}</div>
+    <div class="badges">${typeBadge(t.type)}${t.genres.slice(0,2).map(g=>`<span class="badge">${esc(g)}</span>`).join("")}</div>
+    <div class="meta">Released: ${t.release_date??"unknown"} · Rating: ${fmt(t.rating,"/10")} · IMDb: ${fmt(t.imdb_rating,"/10")}</div>
+    <div class="meta">Search trend: ${arrow(t.search_growth_pct)} · Interest: ${fmt(t.search_interest,"/100")} · Popularity: ${fmt(t.popularity)}</div>
+    <span class="score-pill">Trend score ${t.trend_score} · ${esc(t.confidence)} confidence</span>
+    <div class="prov">Source: <b>${esc(Object.values(t.provenance)[0]?.source??"n/a")}</b> · Updated: ${ago(t.last_updated)}</div>
+  </div></div>`;
+}
+function render(){
+  const list=DATA.titles.filter(t=>filterType==="all"||t.type===filterType);
+  document.getElementById("grid").innerHTML=list.map(card).join("")||`<p class="sub">No titles.</p>`;
+  document.getElementById("ilist").innerHTML=list.map(t=>{
+    const s=(t.history||[]).map(h=>h.search_interest).filter(v=>v!=null);
+    const dir=(t.search_growth_pct??-999)>2?"up":(t.search_growth_pct??0)<-2?"down":"flat";
+    const label=(t.search_growth_pct??null)===null?`<span class="unavail">trend unavailable</span>`
+      :dir==="up"?"↑ Increasing":dir==="down"?"↓ Decreasing":"→ Stable";
+    const spark=s.length>=2?(()=>{const mn=Math.min(...s),mx=Math.max(...s),r=mx-mn||1;
+      return `<svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline fill="none" stroke="${dir==="down"?"#f85149":"#3fb950"}" stroke-width="2" points="${s.map((v,i)=>`${i/(s.length-1)*100},${28-((v-mn)/r)*26}`).join(" ")}"/></svg>`;})()
+      :`<span class="unavail">current signal only</span>`;
+    return `<div class="irow" onclick="detail(${t.id})"><span class="dir ${dir}">${label}</span>${spark}
+      <div><b>${esc(t.title)}</b><div class="meta">${typeBadge(t.type)} · ${esc(t.genres.slice(0,2).join(" / ")||"genre n/a")}</div></div>
+      <div class="meta" style="margin-left:auto;text-align:right">Google Trends (7d)<br>${ago(t.last_updated)}</div></div>`;
+  }).join("");
+}
+function detail(id){
+  const t=DATA.titles.find(x=>x.id===id);
+  const prov=Object.entries(t.provenance||{}).map(([n,p])=>
+    `<tr><td>${esc(n)}</td><td>${fmt(p.value)}</td><td>${esc(p.source)}</td><td>${esc(p.region)}</td><td>${esc(p.period||"current")}</td><td>${ago(p.collected_at)}</td></tr>`).join("");
+  const hist=(t.history||[]).filter(h=>h.popularity!=null);
+  document.getElementById("modal-body").innerHTML=`
+    <div class="detail-head">
+      ${t.poster_url?`<img class="poster" src="${esc(t.poster_url)}">`:`<div class="poster"></div>`}
+      <div><h2>${esc(t.title)}</h2>
+        <div class="badges">${typeBadge(t.type)}${t.genres.map(g=>`<span class="badge">${esc(g)}</span>`).join("")}</div>
+        <div class="meta">Released: ${t.release_date??"unknown"} · Rating: ${fmt(t.rating,"/10")} · IMDb: ${fmt(t.imdb_rating,"/10")}${t.imdb_votes?` (${Number(t.imdb_votes).toLocaleString("en-US")} votes)`:""}</div>
+        <p class="meta" style="margin-top:8px">${esc(t.overview||"No description provided by source.")}</p></div></div>
+    <div class="section"><h3>Current demand (trend score)</h3>
+      <div class="bar-wrap"><div class="bar" style="width:${t.trend_score??0}%"></div></div>
+      <div class="meta">${fmt(t.trend_score,"/100")} · confidence ${esc(t.confidence||"unavailable")}</div></div>
+    <div class="section"><h3>Why it is trending</h3><ul class="why">${t.why_trending.map(w=>`<li>${esc(w)}</li>`).join("")}</ul></div>
+    <div class="section"><h3>Search trend</h3>${arrow(t.search_growth_pct)} · interest ${fmt(t.search_interest,"/100")}<div class="meta">Source: Google Trends · last 7 days</div></div>
+    ${hist.length>=2?`<div class="section"><h3>Popularity trend (real snapshots)</h3>
+      <svg width="100%" height="100" viewBox="0 0 400 100" preserveAspectRatio="none"><polyline fill="none" stroke="#3fb950" stroke-width="2.5" points="${hist.map((h,i)=>`${i/(hist.length-1)*400},${95-(h.popularity/Math.max(...hist.map(x=>x.popularity)))*90}`).join(" ")}"/></svg>
+      <div class="meta">${hist.length} snapshots · first ${ago(hist[0].collected_at)}</div></div>`
+      :`<div class="section"><h3>Interest trend</h3><span class="unavail">Current signal only — not enough snapshots for a real trend yet.</span></div>`}
+    <div class="section"><h3>Data sources & provenance</h3>
+      <table><tr><th>Metric</th><th>Value</th><th>Source</th><th>Region</th><th>Period</th><th>Updated</th></tr>${prov}</table></div>
+    <div class="section"><h3>Last updated</h3><div>${ago(t.last_updated)} (${esc(t.last_updated||"")} UTC)</div></div>`;
+  document.getElementById("modal").classList.remove("hidden");
+}
+document.querySelectorAll(".nav-btn").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll(".nav-btn").forEach(x=>x.classList.toggle("active",x===b));
+  document.getElementById("view-trending").classList.toggle("hidden",b.dataset.v!=="trending");
+  document.getElementById("view-interest").classList.toggle("hidden",b.dataset.v!=="interest");
+});
+document.querySelectorAll(".pill[data-t]").forEach(p=>p.onclick=()=>{
+  document.querySelectorAll(".pill[data-t]").forEach(x=>x.classList.toggle("active",x===p));
+  filterType=p.dataset.t; render();
+});
+fetch("data.json").then(r=>r.json()).then(d=>{
+  DATA=d;
+  document.getElementById("snapchip").textContent=`static snapshot · generated ${ago(d.generated_at)}`;
+  document.getElementById("sources").innerHTML="Data sources: "+d.sources.map(s=>`<b>${s.name}</b> (<a href="${s.url}" target="_blank" rel="noopener">${s.url.replace("https://","")}</a>) — ${s.provides}`).join(" · ");
+  render();
+});
+document.getElementById("modal").onclick=e=>{if(e.target.id==="modal")e.currentTarget.classList.add("hidden")};
+</script>
+</body>
+</html>
