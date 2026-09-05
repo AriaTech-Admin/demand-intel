@@ -32,7 +32,8 @@ def _title_row(db, r) -> dict:
     m = db.execute(
         """SELECT metric_name, value, source, region, period, collected_at, quality
            FROM metrics WHERE title_id=? AND metric_name IN
-           ('search_interest','search_growth_pct','tmdb_popularity','imdb_rating','imdb_votes')
+           ('search_interest','search_growth_pct','tmdb_popularity','imdb_rating','imdb_votes',
+            'wiki_views_7d','wiki_views_growth_pct')
            ORDER BY collected_at DESC""", (r["id"],)).fetchall()
     latest = {}
     for x in m:                                   # keep most recent per metric
@@ -58,6 +59,8 @@ def _title_row(db, r) -> dict:
         "search_growth_pct": latest.get("search_growth_pct", {}).get("value"),
         "imdb_rating": latest.get("imdb_rating", {}).get("value"),
         "imdb_votes": latest.get("imdb_votes", {}).get("value"),
+        "wiki_views_7d": latest.get("wiki_views_7d", {}).get("value"),
+        "wiki_views_growth_pct": latest.get("wiki_views_growth_pct", {}).get("value"),
         "provenance": {k: {kk: vv for kk, vv in v.items() if kk != "metric_name"}
                        for k, v in latest.items()},
         "last_updated": last_metric_at,

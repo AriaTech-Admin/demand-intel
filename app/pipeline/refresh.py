@@ -11,6 +11,7 @@ from ..providers.base import TitleData
 from ..providers.google_trends import GoogleTrendsProvider
 from ..providers.imdb import IMDbDatasetsProvider
 from ..providers.tmdb import TMDBProvider
+from ..providers.wikipedia import WikipediaPageviewsProvider
 from .scoring import compute_and_store_scores
 from .validate import deduplicate, validate_title
 
@@ -198,4 +199,51 @@ def _collect_and_score() -> dict:
                 break
 
     compute_and_store_scores()
+
+    # Wikipedia pageviews (official Wikimedia API, absolute numbers) — collected
+    # AFTER scoring so Trends rate limits never block this independent signal.
+    detail.update(_collect_wikipedia(validated, id_map))
+    return detail
+
+
+def _collect_wikipedia(validated: list[TitleData], id_map: dict) -> dict:
+    detail = {"wiki_signals": 0}
+    wiki = WikipediaPageviewsProvider()
+    try:
+        with get_db() as db:
+            for t in validated[:20]:
+                title_id = id_map.get((t.provider, t.provider_id, t.type))
+                if not title_id:
+                    continue
+                row = db.execute("SELECT article FROM wiki_articles WHERE title_id=?",
+                                 (title_id,)).fetchone()
+                article = row["article"] if row else None
+                if not article:
+                    article = wiki.resolve_article(t.title, t.type)
+                    if not article:
+                        continue                    # no article — metric stays unavailable
+                    db.execute("INSERT INTO wiki_articles(title_id, article, resolved_at) VALUES(?,?,?) "
+                               "ON CONFLICT(title_id) DO UPDATE SET article=excluded.article, "
+                               "resolved_at=excluded.resolved_at",
+                               (title_id, article, utcnow()))
+                v = wiki.get_weekly_views(article)
+                if not v:
+                    continue
+                if v["total_7d"] < 50:
+                    # Almost certainly the wrong article (a real trending title's
+                    # page gets more). Don't store misleading numbers; drop the
+                    # cached mapping so a future refresh retries resolution.
+                    db.execute("DELETE FROM wiki_articles WHERE title_id=?", (title_id,))
+                    continue
+                for metric, value in (("wiki_views_7d", v["total_7d"]),
+                                      ("wiki_views_growth_pct", v["growth_pct"])):
+                    if value is None:
+                        continue
+                    db.execute(
+                        """INSERT INTO metrics(title_id, metric_name, value, source, region, period, collected_at, quality)
+                           VALUES(?,?,?,?,?,?,?, 'verified')""",
+                        (title_id, metric, value, wiki.name, "Global", "7d", utcnow()))
+                    detail["wiki_signals"] += 1
+    finally:
+        wiki.close()
     return detail

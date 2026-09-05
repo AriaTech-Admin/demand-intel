@@ -74,9 +74,9 @@ function card(t, opts = {}) {
     <div class="card-body">
       <div class="card-title">${esc(t.title)}</div>
       <div class="badges">${typeBadge(t.type)}${t.genres.slice(0, 2).map(g => `<span class="badge">${esc(g)}</span>`).join("")}</div>
-      <div class="meta">Released: ${t.release_date ?? "unknown"} · Rating: ${fmt(t.rating, "/10")}</div>
+      <div class="meta">Released: ${t.release_date ?? "unknown"} · Rating: ${fmt(t.rating, "/10")} · IMDb: ${fmt(t.imdb_rating, "/10")}</div>
       <div class="trend-line">
-        <div>Search trend: ${arrow(t.search_growth_pct)}</div>
+        <div>Search trend: ${arrow(t.search_growth_pct)}${(t.wiki_views_7d ?? null) !== null ? ` · Wikipedia: ${Number(t.wiki_views_7d).toLocaleString("en-US")} views/wk ${arrow(t.wiki_views_growth_pct)}` : ""}</div>
         <div>Interest: ${fmt(t.search_interest, "/100")} · Popularity: ${fmt(t.popularity)} ${arrow(opts.popDelta ?? null)}</div>
         ${t.trend_score !== undefined ? `<span class="score-pill">Trend score ${t.trend_score} · ${esc(t.confidence)} confidence</span>` : ""}
       </div>

@@ -74,6 +74,11 @@ CREATE TABLE IF NOT EXISTS availability (
     collected_at TEXT NOT NULL,
     PRIMARY KEY(title_id, region)
 );
+CREATE TABLE IF NOT EXISTS wiki_articles (
+    title_id INTEGER PRIMARY KEY REFERENCES titles(id),
+    article TEXT NOT NULL,              -- resolved en.wikipedia article name
+    resolved_at TEXT NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_metrics_title ON metrics(title_id, metric_name, region, period);
 CREATE INDEX IF NOT EXISTS idx_snapshots_title ON snapshots(title_id, collected_at);
 """
